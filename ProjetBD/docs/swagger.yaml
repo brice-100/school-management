@@ -1,0 +1,64 @@
+openapi: 3.0.3
+info:
+  title: School Management API
+  description: |
+    API REST pour la gestion des écoles primaires.
+    
+    **Rôles disponibles :**
+    - `0` root  
+    - `1` Admin  
+    - `2` Fondateur  
+    - `3` Directeur  
+    - `1` Enseignant (typePersonne)  
+    - `2` Administratif  
+    - `3` Scolarité  
+    - `4` Parent
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5000/api
+    description: Serveur de développement
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+
+    Success:
+      type: object
+      properties:
+        message:
+          type: string
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Système]
+      summary: Vérification de l'état du serveur
+      security: []
+      responses:
+        '200':
+          description: Serveur opérationnel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: OK
+                  timestamp:
+                    type: string
+                    format: date-time

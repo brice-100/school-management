@@ -1,0 +1,473 @@
+import { useState, useEffect } from 'react'
+import { Plus, Check, CheckSquare, Trash2 } from 'lucide-react'
+import {
+  getGrades, createGrade, validerGrades,
+  deleteGrade, getGradeFormData,
+} from '../../services/gradeService'
+import { getClasses }  from '../../services/classService'
+import { getMatieres } from '../../services/matiereService'
+import { getStudents } from '../../services/studentService'
+import { filterDeleted } from '../../services/deleteConfig'
+import { useAuth }     from '../../context/AuthContext'
+import { useYear }     from '../../context/YearContext'
+import toast           from 'react-hot-toast'
+
+const TRIMESTRES = [1, 2, 3]
+
+export default function GradeList() {
+  const { user }  = useAuth()
+  const { selectedYear } = useYear()
+  const isAdmin   = user?.role === 'admin'
+  const isTeacher = user?.role === 'teacher'
+
+  const [grades,   setGrades]   = useState([])
+  const [classes,  setClasses]  = useState([])
+  const [matieres, setMatieres] = useState([])
+  const [students, setStudents] = useState([])
+  const [epreuves, setEpreuves] = useState([])
+  const [sessions, setSessions] = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [selected, setSelected] = useState([])
+  const [showForm, setShowForm] = useState(false)
+  const [formLoading, setFormLoading] = useState(false)
+
+  const [filters, setFilters] = useState({
+    classe_id: '', matiere_id: '', trimestre: '1',
+  })
+  const [form, setForm] = useState({
+    student_id: '', matiere_id: '', valeur: '',
+    trimestre: '1', commentaire: '',
+    idEpreuve: '', idSession: '',
+  })
+
+  // ── Charger les données selon le rôle ──────────────────────────
+  useEffect(() => {
+    if (isTeacher) {
+      setFormLoading(true)
+      getGradeFormData()
+        .then(({ data }) => {
+          const d = data.data
+          setStudents(d.students || [])
+          setMatieres(d.matieres || [])
+          setEpreuves(d.epreuves || [])
+          setSessions(d.sessions || [])
+          console.log('[GradeFormData]', d) // debug
+        })
+        .catch(err => {
+          console.error('[GradeFormData ERROR]', err)
+          // Fallback : charger tous les élèves et matières
+          Promise.all([
+            getStudents({}),
+            getMatieres(),
+          ]).then(([s, m]) => {
+            setStudents(s.data.data || [])
+            setMatieres(m.data.data || [])
+          })
+        })
+        .finally(() => setFormLoading(false))
+    }
+
+    if (isAdmin) {
+      Promise.all([getClasses(), getMatieres()])
+        .then(([c, m]) => {
+          setClasses(c.data.data  || [])
+          setMatieres(m.data.data || [])
+        })
+        .catch(() => toast.error('Erreur chargement filtres.'))
+    }
+  }, [isTeacher, isAdmin])
+
+  // ── Charger les notes ──────────────────────────────────────────
+  const fetchGrades = async () => {
+    if (!selectedYear?.libelle) return
+    setLoading(true)
+    try {
+      const params = { ...filters, annee_scolaire: selectedYear.libelle }
+      const { data } = await getGrades(params)
+      setGrades(filterDeleted(data.data || []))
+    } catch (err) {
+      console.error('[Grades ERROR]', err)
+      toast.error('Erreur chargement notes.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchGrades() }, [filters])
+
+  // ── Saisir une note ────────────────────────────────────────────
+  const handleCreate = async (e) => {
+    e.preventDefault()
+    if (!form.student_id) return toast.error('Sélectionnez un élève.')
+    if (!form.matiere_id) return toast.error('Sélectionnez une matière.')
+    if (!form.valeur)     return toast.error('Saisissez une note.')
+    const v = parseFloat(form.valeur)
+    if (isNaN(v) || v < 0 || v > 20)
+      return toast.error('La note doit être entre 0 et 20.')
+
+    try {
+      await createGrade({
+        student_id:    parseInt(form.student_id, 10),
+        matiere_id:    parseInt(form.matiere_id, 10),
+        valeur:        v,
+        trimestre:     parseInt(form.trimestre, 10),
+        commentaire:   form.commentaire || null,
+        annee_scolaire: selectedYear?.libelle,
+        idEpreuve:     form.idEpreuve ? parseInt(form.idEpreuve, 10) : undefined,
+        idSession:     form.idSession ? parseInt(form.idSession, 10) : undefined,
+      })
+      toast.success('Note enregistrée !')
+      setShowForm(false)
+      setForm({ student_id: '', matiere_id: '', valeur: '', trimestre: '1', commentaire: '' })
+      fetchGrades()
+    } catch (err) {
+      toast.error(err.message || 'Erreur enregistrement.')
+    }
+  }
+
+  // ── Valider (admin) ────────────────────────────────────────────
+  const handleValider = async () => {
+    if (!selected.length) return toast.error('Sélectionnez des notes à valider.')
+    try {
+      await validerGrades(selected)
+      toast.success(`${selected.length} note(s) validée(s) !`)
+      setSelected([])
+      fetchGrades()
+    } catch { toast.error('Erreur validation.') }
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Supprimer cette note ?')) return
+    try {
+      await deleteGrade(id)
+      toast.success('Note supprimée.')
+      fetchGrades()
+    } catch { toast.error('Erreur suppression.') }
+  }
+
+  const toggleSelect = (id) =>
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+
+  const noteColor = (val) => {
+    const v = parseFloat(val)
+    if (v >= 16) return 'text-emerald-600 font-bold'
+    if (v >= 10) return 'text-blue-600 font-semibold'
+    return 'text-red-500 font-semibold'
+  }
+
+  return (
+    <div className="page-container">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-gray-900">Notes</h1>
+          <p className="text-gray-500 text-sm mt-0.5 flex items-center gap-2">
+            {grades.length} note(s) — {selectedYear?.libelle || '...'}
+            {isTeacher && (
+              <span className="badge bg-blue-50 text-blue-700">Mes notes</span>
+            )}
+            {isAdmin && (
+              <span className="badge bg-amber-50 text-amber-700">Vue admin</span>
+            )}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {isAdmin && selected.length > 0 && (
+            <button onClick={handleValider}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600
+                hover:bg-emerald-700 text-white text-sm font-medium rounded-xl">
+              <CheckSquare size={16} /> Valider ({selected.length})
+            </button>
+          )}
+          {isTeacher && (
+            <button onClick={() => setShowForm(v => !v)} className="btn-primary">
+              <Plus size={16} /> Saisir une note
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filtres admin */}
+      {isAdmin && (
+        <div className="flex flex-wrap gap-3 mb-5">
+          <select value={filters.classe_id}
+            onChange={e => setFilters(f => ({ ...f, classe_id: e.target.value }))}
+            className="select-field w-44">
+            <option value="">Toutes les classes</option>
+            {classes.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+          </select>
+          <select value={filters.matiere_id}
+            onChange={e => setFilters(f => ({ ...f, matiere_id: e.target.value }))}
+            className="select-field w-44">
+            <option value="">Toutes les matières</option>
+            {matieres.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}
+          </select>
+          <select value={filters.trimestre}
+            onChange={e => setFilters(f => ({ ...f, trimestre: e.target.value }))}
+            className="select-field w-40">
+            {TRIMESTRES.map(t => (
+              <option key={t} value={t}>Trimestre {t}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Filtre trimestre enseignant */}
+      {isTeacher && (
+        <div className="flex gap-3 mb-5">
+          <select value={filters.trimestre}
+            onChange={e => setFilters(f => ({ ...f, trimestre: e.target.value }))}
+            className="select-field w-40">
+            {TRIMESTRES.map(t => (
+              <option key={t} value={t}>Trimestre {t}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Formulaire saisie enseignant */}
+      {showForm && isTeacher && (
+        <form onSubmit={handleCreate} className="card p-5 mb-5">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
+            Saisir une note
+          </h2>
+
+          {formLoading ? (
+            <p className="text-gray-400 text-sm">Chargement des données...</p>
+          ) : (
+            <>
+              {/* Message si pas de données */}
+              {students.length === 0 && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <p className="text-amber-700 text-xs">
+                    ⚠️ Aucun élève trouvé. Vérifiez que des élèves sont assignés à vos classes.
+                  </p>
+                </div>
+              )}
+              {matieres.length === 0 && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <p className="text-amber-700 text-xs">
+                    ⚠️ Aucune matière trouvée. Demandez à l'administrateur d'en ajouter.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="form-label">
+                    Élève * ({students.length} disponibles)
+                  </label>
+                  <select
+                    value={form.student_id}
+                    onChange={e => setForm(f => ({ ...f, student_id: e.target.value }))}
+                    className="select-field"
+                  >
+                    <option value="">— Choisir —</option>
+                    {students.map(s => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.prenom} {s.nom}
+                        {s.classe_nom ? ` (${s.classe_nom})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label">
+                    Matière * ({matieres.length} disponibles)
+                  </label>
+                  <select
+                    value={form.matiere_id}
+                    onChange={e => setForm(f => ({ ...f, matiere_id: e.target.value }))}
+                    className="select-field"
+                  >
+                    <option value="">— Choisir —</option>
+                    {matieres.map(m => (
+                      <option key={m.id} value={String(m.id)}>{m.nom}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label">Note (0–20) *</label>
+                  <input
+                    type="number" min="0" max="20" step="0.25"
+                    value={form.valeur}
+                    onChange={e => setForm(f => ({ ...f, valeur: e.target.value }))}
+                    placeholder="Ex: 14.5"
+                    className="input-field"
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label">Trimestre</label>
+                  <select
+                    value={form.trimestre}
+                    onChange={e => setForm(f => ({ ...f, trimestre: e.target.value }))}
+                    className="select-field"
+                  >
+                    {TRIMESTRES.map(t => (
+                      <option key={t} value={t}>Trimestre {t}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label text-xs">Épreuve / Devoir (Optionnel)</label>
+                  <select
+                    value={form.idEpreuve}
+                    onChange={e => setForm(f => ({ ...f, idEpreuve: e.target.value }))}
+                    className="select-field"
+                  >
+                    <option value="">— Standard / Général —</option>
+                    {epreuves.map(e => (
+                      <option key={e.id} value={String(e.id)}>{e.nom}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label text-xs">Session spécifique (Optionnel)</label>
+                  <select
+                    value={form.idSession}
+                    onChange={e => setForm(f => ({ ...f, idSession: e.target.value }))}
+                    className="select-field"
+                  >
+                    <option value="">— Par défaut —</option>
+                    {sessions.map(s => (
+                      <option key={s.id} value={String(s.id)}>{s.nom}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="form-label">Commentaire (optionnel)</label>
+                  <input
+                    value={form.commentaire}
+                    onChange={e => setForm(f => ({ ...f, commentaire: e.target.value }))}
+                    placeholder="Appréciation..."
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-4">
+                <button type="submit" className="btn-primary">
+                  Enregistrer
+                </button>
+                <button type="button" onClick={() => setShowForm(false)}
+                  className="btn-secondary">
+                  Annuler
+                </button>
+              </div>
+            </>
+          )}
+        </form>
+      )}
+
+      {/* Tableau des notes */}
+      <div className="card overflow-hidden">
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex gap-4">
+                <div className="skeleton h-4 flex-1 rounded" />
+                <div className="skeleton h-4 w-20 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : grades.length === 0 ? (
+          <div className="py-14 text-center">
+            <p className="text-gray-400 text-sm">
+              {isTeacher
+                ? 'Aucune note pour ce trimestre. Cliquez sur "Saisir une note".'
+                : 'Aucune note pour ces filtres.'}
+            </p>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100">
+                {isAdmin && (
+                  <th className="px-4 py-3 w-10">
+                    <input type="checkbox"
+                      onChange={e => setSelected(
+                        e.target.checked
+                          ? grades.filter(g => g.statut === 'brouillon').map(g => g.id)
+                          : []
+                      )}
+                      className="w-4 h-4 rounded border-gray-300"
+                    />
+                  </th>
+                )}
+                <th className="text-left font-medium text-gray-500 px-4 py-3">Élève</th>
+                <th className="text-left font-medium text-gray-500 px-4 py-3">Matière</th>
+                <th className="text-left font-medium text-gray-500 px-4 py-3">Classe</th>
+                <th className="text-center font-medium text-gray-500 px-4 py-3">Note</th>
+                <th className="text-left font-medium text-gray-500 px-4 py-3">Statut</th>
+                {isAdmin  && <th className="text-left font-medium text-gray-500 px-4 py-3">Enseignant</th>}
+                {isTeacher && <th className="text-right font-medium text-gray-500 px-4 py-3">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {grades.map(g => (
+                <tr key={g.id}
+                  className={`hover:bg-gray-50/50 transition-colors
+                    ${selected.includes(g.id) ? 'bg-blue-50/40' : ''}`}>
+                  {isAdmin && (
+                    <td className="px-4 py-3">
+                      {g.statut === 'brouillon' && (
+                        <input type="checkbox"
+                          checked={selected.includes(g.id)}
+                          onChange={() => toggleSelect(g.id)}
+                          className="w-4 h-4 rounded border-gray-300 text-primary-500"
+                        />
+                      )}
+                    </td>
+                  )}
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {g.student_prenom} {g.student_nom}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{g.matiere_nom}</td>
+                  <td className="px-4 py-3">
+                    <span className="badge bg-blue-50 text-blue-700">
+                      {g.classe_nom || '—'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`text-lg ${noteColor(g.valeur)}`}>
+                      {parseFloat(g.valeur).toFixed(2)}
+                    </span>
+                    <span className="text-gray-400 text-xs">/20</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {g.statut === 'valide'
+                      ? <span className="badge bg-emerald-50 text-emerald-700">
+                          <Check size={11} className="mr-1" />Validée
+                        </span>
+                      : <span className="badge bg-amber-50 text-amber-700">Brouillon</span>
+                    }
+                  </td>
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      {g.teacher_prenom} {g.teacher_nom}
+                    </td>
+                  )}
+                  {isTeacher && (
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end">
+                        <button onClick={() => handleDelete(g.id)}
+                          className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
