@@ -12,9 +12,10 @@ const getAll = asyncHandler(async (req, res) => {
   if (req.query.actif  !== undefined) filters.actif  = parseInt(req.query.actif);
   if (req.query.idAdmin !== undefined) filters.idAdmin = parseInt(req.query.idAdmin);
   if (req.query.idAnnee !== undefined) filters.idAnnee = parseInt(req.query.idAnnee);
+  if (req.query.classe_id !== undefined) filters.classe_id = parseInt(req.query.classe_id);
 
   const eleves = await eleveModel.findAll(filters);
-  return res.status(200).json({ total: eleves.length, eleves });
+  return res.status(200).json({ total: eleves.length, data: eleves });
 });
 
 /**
@@ -27,7 +28,7 @@ const getOne = asyncHandler(async (req, res) => {
   if (!eleve) {
     return res.status(404).json({ message: 'Élève introuvable' });
   }
-  return res.status(200).json({ eleve });
+  return res.status(200).json({ data: eleve });
 });
 
 /**
@@ -43,7 +44,7 @@ const getByClasse = asyncHandler(async (req, res) => {
   }
 
   const eleves = await eleveModel.findByClasse(idClasse, idAnnee);
-  return res.status(200).json({ total: eleves.length, eleves });
+  return res.status(200).json({ total: eleves.length, data: eleves });
 });
 
 /**
@@ -68,7 +69,7 @@ const create = asyncHandler(async (req, res) => {
     if (salles.length > 0) {
       idSalle = salles[0].idSalle;
     } else {
-      const [res] = await pool.query('INSERT INTO Salle (libelle, idClasse, actif, idAdmin, created_at) VALUES (?, ?, 1, ?, NOW())', ['Salle Unique', req.body.classe_id, data.idAdmin]);
+      const [res] = await pool.query('INSERT INTO Salle (libelle, surface, idClasse, actif, idAdmin, created_at) VALUES (?, ?, ?, 1, ?, NOW())', ['Salle Unique', 'NON DEFINIE', req.body.classe_id, data.idAdmin]);
       idSalle = res.insertId;
     }
     const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
@@ -112,7 +113,7 @@ const update = asyncHandler(async (req, res) => {
       if (salles.length > 0) {
         idSalle = salles[0].idSalle;
       } else {
-        const [res] = await pool.query('INSERT INTO Salle (libelle, idClasse, actif, idAdmin, created_at) VALUES (?, ?, 1, ?, NOW())', ['Salle Unique', req.body.classe_id, req.user.id]);
+        const [res] = await pool.query('INSERT INTO Salle (libelle, surface, idClasse, actif, idAdmin, created_at) VALUES (?, ?, ?, 1, ?, NOW())', ['Salle Unique', 'NON DEFINIE', req.body.classe_id, req.user.id]);
         idSalle = res.insertId;
       }
       const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');

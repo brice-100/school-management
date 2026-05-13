@@ -1,74 +1,206 @@
 const asyncHandler = require('../utils/asyncHandler');
 const pool = require('../config/db');
 
+/**
+ * GET /api/bulletins/:id?trimestre=1&annee_scolaire=2024-2025
+ * 
+ * CORRECTIF : Le frontend envoie trimestre=1,2 ou 3 (numéro ordinal).
+ * La DB stocke Trimestre.idTrimes qui est un ID auto-incrémenté (ex: 5,6,7).
+ * On filtre donc par l'ordre du trimestre dans l'année (1er, 2e, 3e trimestre
+ * de l'année scolaire donnée), pas par l'ID brut.
+ */
 const getBulletinData = asyncHandler(async (req, res) => {
-  const matricule = parseInt(req.params.id);
-  const trimestre = req.query.trimestre || 1;
+  const matricule      = parseInt(req.params.id);
+  const trimestreNum   = parseInt(req.query.trimestre) || 1;   // 1, 2 ou 3
   const annee_scolaire = req.query.annee_scolaire || '2024-2025';
 
+  // 1. Infos élève
   const [students] = await pool.query(`
     SELECT 
-      e.nom, e.prenom, e.photoURL as photo, e.dateNaissance as date_naissance, 
-      c.libelle as classe_nom, 
-      p.nom as parent_nom, p.prenom as parent_prenom, p.mobile as telephone
+      e.matricule, e.nom, e.prenom, e.photoURL AS photo,
+      e.dateNaissance AS date_naissance, e.lieuNaissance AS lieu_naissance,
+      c.libelle AS classe_nom,
+      p.nom AS parent_nom, p.prenom AS parent_prenom,
+      p.mobile AS telephone, p.photo AS parent_photo,
+      p_tit.nom AS enseignant_nom, p_tit.prenom AS enseignant_prenom,
+      (SELECT COUNT(*) FROM Frequente f2 WHERE f2.idSalle = f.idSalle) AS effectif
     FROM Eleve e
-    LEFT JOIN Frequente f ON f.matricule = e.matricule
-    LEFT JOIN Salle s ON s.idSalle = f.idSalle
-    LEFT JOIN Classe c ON c.idClasse = s.idClasse
-    LEFT JOIN Parents pr ON pr.matricule = e.matricule
-    LEFT JOIN Personne p ON p.idPers = pr.idPers
-    WHERE e.matricule = ? LIMIT 1
+    LEFT JOIN Frequente f  ON f.matricule = e.matricule
+    LEFT JOIN Salle s      ON s.idSalle = f.idSalle
+    LEFT JOIN Classe c     ON c.idClasse = s.idClasse
+    LEFT JOIN Parents pr   ON pr.matricule = e.matricule
+    LEFT JOIN Personne p   ON p.idPers = pr.idPers
+    LEFT JOIN Titulaire t  ON t.idSalle = s.idSalle AND t.actif = 1
+    LEFT JOIN Personne p_tit ON p_tit.idPers = t.idPers
+    WHERE e.matricule = ?
+    LIMIT 1
   `, [matricule]);
 
-  if (students.length === 0) return res.status(404).json({ message: 'Élève introuvable' });
+  if (students.length === 0) {
+    return res.status(404).json({ message: 'Élève introuvable' });
+  }
   const student = students[0];
 
-  const [evals] = await pool.query(`
-    SELECT 
-      ev.idEval as id, ev.note as valeur, ev.appreciation as commentaire, 
-      c.libelle as matiere_nom, 
-      p.nom as teacher_nom, p.prenom as teacher_prenom,
-      'valide' as statut
-    FROM Evaluation ev
-    JOIN Cours c ON ev.idCours = c.idCours
-    JOIN Personne p ON ev.idPers = p.idPers
-    JOIN Session s ON ev.idSession = s.idSession
-    JOIN Trimestre t ON s.idTrimestre = t.idTrimes
+  // 2. Trouver l'idTrimes correct : le Nième trimestre de l'année scolaire
+  //    (classé par idTrimes ASC pour avoir l'ordre chronologique)
+  const [trimestres] = await pool.query(`
+    SELECT t.idTrimes, t.libelle
+    FROM Trimestre t
     JOIN AnneeAcademique aa ON t.idAca = aa.idAnnee
-    WHERE ev.matricule = ? 
-    AND t.idTrimes = ? 
-    AND aa.libelle = ?
-  `, [matricule, trimestre, annee_scolaire]);
+    WHERE aa.libelle = ?
+    ORDER BY t.idTrimes ASC
+  `, [annee_scolaire]);
 
-  let sum = 0;
-  evals.forEach(ev => sum += parseFloat(ev.valeur) || 0);
-  const count = evals.length;
-  const moyenne = count > 0 ? (sum / count).toFixed(2) : null;
+  // Si pas de trimestres pour cette année, essayer par libelle contenant le numéro
+  let idTrimes = null;
+  if (trimestres.length > 0) {
+    // Prendre le Nième trimestre (index trimestreNum - 1)
+    const idx = trimestreNum - 1;
+    if (trimestres[idx]) {
+      idTrimes = trimestres[idx].idTrimes;
+    } else {
+      // Fallback : prendre le dernier disponible
+      idTrimes = trimestres[trimestres.length - 1].idTrimes;
+    }
+  }
+
+  // 3. Évaluations groupées par matière
+  let groupedNotes = [];
+  if (idTrimes) {
+    const [evRows] = await pool.query(`
+      SELECT 
+        ev.idEval,
+        ev.note AS valeur,
+        ev.appreciation AS commentaire,
+        c.idCours,
+        c.libelle AS matiere_nom,
+        c.coefficient,
+        ep.libelle AS epreuve_nom
+      FROM Evaluation ev
+      JOIN Cours c         ON ev.idCours = c.idCours
+      JOIN Session s       ON ev.idSession = s.idSession
+      JOIN Epreuve ep      ON ev.idEpreuve = ep.idEpreuve
+      WHERE ev.matricule = ?
+        AND s.idTrimestre = ?
+        AND ev.valider = 1
+      ORDER BY c.libelle, ev.created_at ASC
+    `, [matricule, idTrimes]);
+
+    // Groupement
+    const map = new Map();
+    evRows.forEach(row => {
+      if (!map.has(row.idCours)) {
+        map.set(row.idCours, {
+          idCours: row.idCours,
+          matiere_nom: row.matiere_nom,
+          coefficient: row.coefficient,
+          seq1: null,
+          seq2: null,
+          comp: null,
+          all_notes: []
+        });
+      }
+      const m = map.get(row.idCours);
+      m.all_notes.push(row.valeur);
+      
+      // Attribution heuristique si pas d'étiquette précise
+      const lib = row.epreuve_nom.toLowerCase();
+      if (lib.includes('seq1') || lib.includes('séquence 1')) m.seq1 = row.valeur;
+      else if (lib.includes('seq2') || lib.includes('séquence 2')) m.seq2 = row.valeur;
+      else if (lib.includes('comp') || lib.includes('exam')) m.comp = row.valeur;
+      else {
+        // Fallback par ordre d'arrivée
+        if (m.seq1 === null) m.seq1 = row.valeur;
+        else if (m.seq2 === null) m.seq2 = row.valeur;
+        else if (m.comp === null) m.comp = row.valeur;
+      }
+    });
+    
+    groupedNotes = Array.from(map.values()).map(m => {
+      const count = (m.seq1 !== null ? 1 : 0) + (m.seq2 !== null ? 1 : 0) + (m.comp !== null ? 1 : 0);
+      const sum = (m.seq1 || 0) + (m.seq2 || 0) + (m.comp || 0);
+      const moy = count > 0 ? (sum / count) : 0;
+      return { ...m, moyenne_matiere: moy };
+    });
+  }
+
+  // 4. Calcul moyenne générale pondérée
+  let sumNotes = 0;
+  let sumCoeff = 0;
+  groupedNotes.forEach(n => {
+    const coeff = parseFloat(n.coefficient) || 1;
+    sumNotes += n.moyenne_matiere * coeff;
+    sumCoeff += coeff;
+  });
   
-  let mention = '—';
-  if (moyenne !== null) {
-    const m = parseFloat(moyenne);
-    if (m >= 16) mention = 'Très Bien';
-    else if (m >= 14) mention = 'Bien';
-    else if (m >= 12) mention = 'Assez Bien';
-    else if (m >= 10) mention = 'Passable';
-    else mention = 'Insuffisant';
+  const moyenneGen = sumCoeff > 0 ? (sumNotes / sumCoeff) : 0;
+
+  function getMention(m) {
+    if (m >= 16) return 'Très Bien';
+    if (m >= 14) return 'Bien';
+    if (m >= 12) return 'Assez Bien';
+    if (m >= 10) return 'Passable';
+    return 'Insuffisant';
+  }
+
+  // 5. Statistiques de classe
+  let classStats = {
+    moyenneMax: '0.00',
+    moyenneMin: '0.00',
+    moyenneClasse: '0.00',
+    tauxReussite: '0%',
+    rang: '—'
+  };
+
+  const [classSalles] = await pool.query('SELECT idSalle FROM Frequente WHERE matricule = ?', [matricule]);
+  if (classSalles.length > 0) {
+    const idSalle = classSalles[0].idSalle;
+    // Récupérer toutes les moyennes des élèves de la classe pour ce trimestre
+    const [allMoyennes] = await pool.query(`
+      SELECT 
+        e.matricule,
+        SUM(ev.note * c.coefficient) / SUM(c.coefficient) as moyenne
+      FROM Eleve e
+      JOIN Frequente f ON e.matricule = f.matricule
+      JOIN Evaluation ev ON e.matricule = ev.matricule
+      JOIN Cours c ON ev.idCours = c.idCours
+      JOIN Session s ON ev.idSession = s.idSession
+      WHERE f.idSalle = ? AND s.idTrimestre = ? AND ev.valider = 1
+      GROUP BY e.matricule
+      ORDER BY moyenne DESC
+    `, [idSalle, idTrimes]);
+
+    if (allMoyennes.length > 0) {
+      const moys = allMoyennes.map(m => parseFloat(m.moyenne));
+      classStats.moyenneMax = Math.max(...moys).toFixed(2);
+      classStats.moyenneMin = Math.min(...moys).toFixed(2);
+      classStats.moyenneClasse = (moys.reduce((a, b) => a + b, 0) / moys.length).toFixed(2);
+      classStats.tauxReussite = ((moys.filter(m => m >= 10).length / moys.length) * 100).toFixed(0) + '%';
+      
+      const rankIdx = allMoyennes.findIndex(m => m.matricule === matricule);
+      classStats.rang = rankIdx !== -1 ? (rankIdx + 1) : '—';
+    }
   }
 
   return res.status(200).json({
     data: {
-      trimestre,
+      trimestre: trimestreNum,
       annee_scolaire,
-      student,
-      moyenne,
-      mention,
-      admis: moyenne !== null && parseFloat(moyenne) >= 10,
-      nb_matieres: count,
-      notes: evals
+      student: {
+        ...student,
+        enseignant_nom: student.enseignant_nom ? `${student.enseignant_prenom} ${student.enseignant_nom}` : null
+      },
+      moyenne: moyenneGen.toFixed(2),
+      mention: getMention(moyenneGen),
+      admis: moyenneGen >= 10,
+      notes: groupedNotes,
+      stats: classStats
     }
   });
 });
 
-const downloadBulletinPDF = asyncHandler(async (req, res) => res.status(200).send('PDF placeholder'));
+const downloadBulletinPDF = asyncHandler(async (req, res) =>
+  res.status(200).send('PDF placeholder')
+);
 
 module.exports = { getBulletinData, downloadBulletinPDF };

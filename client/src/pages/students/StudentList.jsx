@@ -64,20 +64,22 @@ export default function StudentList() {
   return (
     <div className="page-container">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-gray-900">
+          <h1 className="font-display text-xl sm:text-2xl font-semibold text-gray-900">
             {showArchives ? 'Archives des élèves' : 'Élèves'}
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">{students.length} élève{students.length > 1 ? 's' : ''} {showArchives ? 'archivé(s)' : 'inscrit(s)'}</p>
+          <p className="text-gray-500 text-xs sm:text-sm mt-0.5">
+            {students.length} élève{students.length > 1 ? 's' : ''} {showArchives ? 'archivé(s)' : 'inscrit(s)'}
+          </p>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => setShowArchives(!showArchives)} className="btn-secondary">
-            {showArchives ? 'Voir les actifs' : 'Voir les archives'}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowArchives(!showArchives)} className="btn-secondary text-xs sm:text-sm py-1.5 px-3">
+            {showArchives ? 'Actifs' : 'Archives'}
           </button>
           {!showArchives && (
-            <Link to="/students/new" className="btn-primary flex items-center gap-2">
-              <Plus size={16} /> Ajouter un élève
+            <Link to="/students/new" className="btn-primary flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs sm:text-sm py-1.5 px-3">
+              <Plus size={16} /> Ajouter
             </Link>
           )}
         </div>
@@ -127,16 +129,17 @@ export default function StudentList() {
             )}
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left font-medium text-gray-500 px-5 py-3.5">Élève</th>
-                <th className="text-left font-medium text-gray-500 px-5 py-3.5">Classe</th>
-                <th className="text-left font-medium text-gray-500 px-5 py-3.5">Date de naissance</th>
-                <th className="text-left font-medium text-gray-500 px-5 py-3.5">Parent</th>
-                <th className="text-right font-medium text-gray-500 px-5 py-3.5">Actions</th>
-              </tr>
-            </thead>
+          <div className="table-responsive">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left font-medium text-gray-500 px-5 py-3.5 whitespace-nowrap">Élève</th>
+                  <th className="text-left font-medium text-gray-500 px-5 py-3.5 whitespace-nowrap">Classe</th>
+                  <th className="text-left font-medium text-gray-500 px-5 py-3.5 whitespace-nowrap">Naissance</th>
+                  <th className="text-left font-medium text-gray-500 px-5 py-3.5 whitespace-nowrap">Parent</th>
+                  <th className="text-right font-medium text-gray-500 px-5 py-3.5 whitespace-nowrap">Actions</th>
+                </tr>
+              </thead>
             <tbody className="divide-y divide-gray-50">
               {students.map((s) => (
                 <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
@@ -221,6 +224,7 @@ export default function StudentList() {
               ))}
             </tbody>
           </table>
+        </div>
         )}
       </div>
       {ficheMatricule && (

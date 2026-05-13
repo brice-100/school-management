@@ -29,6 +29,7 @@ export default function GradeList() {
   const [loading,  setLoading]  = useState(true)
   const [selected, setSelected] = useState([])
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [formLoading, setFormLoading] = useState(false)
 
   const [filters, setFilters] = useState({
@@ -106,7 +107,7 @@ export default function GradeList() {
       return toast.error('La note doit être entre 0 et 20.')
 
     try {
-      await createGrade({
+      const payload = {
         student_id:    parseInt(form.student_id, 10),
         matiere_id:    parseInt(form.matiere_id, 10),
         valeur:        v,
@@ -115,14 +116,39 @@ export default function GradeList() {
         annee_scolaire: selectedYear?.libelle,
         idEpreuve:     form.idEpreuve ? parseInt(form.idEpreuve, 10) : undefined,
         idSession:     form.idSession ? parseInt(form.idSession, 10) : undefined,
-      })
-      toast.success('Note enregistrée !')
+      }
+
+      if (editingId) {
+        const { updateGrade } = await import('../../services/gradeService')
+        await updateGrade(editingId, payload)
+        toast.success('Note modifiée !')
+      } else {
+        await createGrade(payload)
+        toast.success('Note enregistrée !')
+      }
+
       setShowForm(false)
-      setForm({ student_id: '', matiere_id: '', valeur: '', trimestre: '1', commentaire: '' })
+      setEditingId(null)
+      setForm({ student_id: '', matiere_id: '', valeur: '', trimestre: '1', commentaire: '', idEpreuve: '', idSession: '' })
       fetchGrades()
     } catch (err) {
       toast.error(err.message || 'Erreur enregistrement.')
     }
+  }
+
+  const handleEdit = (g) => {
+    setEditingId(g.id)
+    setForm({
+      student_id:  String(g.matricule || ''),
+      matiere_id:  String(g.idCours || ''),
+      valeur:      String(g.valeur),
+      trimestre:   String(filters.trimestre),
+      commentaire: g.commentaire || '',
+      idEpreuve:   '', // Non retourné par le findAll général pour le moment
+      idSession:   '',
+    })
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   // ── Valider (admin) ────────────────────────────────────────────
@@ -193,13 +219,13 @@ export default function GradeList() {
             onChange={e => setFilters(f => ({ ...f, classe_id: e.target.value }))}
             className="select-field w-44">
             <option value="">Toutes les classes</option>
-            {classes.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+            {classes.map(c => <option key={c.idClasse} value={c.idClasse}>{c.libelle}</option>)}
           </select>
           <select value={filters.matiere_id}
             onChange={e => setFilters(f => ({ ...f, matiere_id: e.target.value }))}
             className="select-field w-44">
             <option value="">Toutes les matières</option>
-            {matieres.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}
+            {matieres.map(m => <option key={m.idCours} value={m.idCours}>{m.libelle}</option>)}
           </select>
           <select value={filters.trimestre}
             onChange={e => setFilters(f => ({ ...f, trimestre: e.target.value }))}
@@ -228,7 +254,7 @@ export default function GradeList() {
       {showForm && isTeacher && (
         <form onSubmit={handleCreate} className="card p-5 mb-5">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
-            Saisir une note
+            {editingId ? 'Modifier la note' : 'Saisir une note'}
           </h2>
 
           {formLoading ? (
@@ -263,7 +289,7 @@ export default function GradeList() {
                   >
                     <option value="">— Choisir —</option>
                     {students.map(s => (
-                      <option key={s.id} value={String(s.id)}>
+                      <option key={s.matricule} value={String(s.matricule)}>
                         {s.prenom} {s.nom}
                         {s.classe_nom ? ` (${s.classe_nom})` : ''}
                       </option>
@@ -282,7 +308,7 @@ export default function GradeList() {
                   >
                     <option value="">— Choisir —</option>
                     {matieres.map(m => (
-                      <option key={m.id} value={String(m.id)}>{m.nom}</option>
+                      <option key={m.idCours} value={String(m.idCours)}>{m.libelle}</option>
                     ))}
                   </select>
                 </div>
@@ -454,9 +480,17 @@ export default function GradeList() {
                   )}
                   {isTeacher && (
                     <td className="px-4 py-3">
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
+                        {g.statut === 'brouillon' && (
+                          <button onClick={() => handleEdit(g)}
+                            className="btn-icon text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600"
+                            title="Modifier">
+                            <Plus size={14} className="rotate-45" /> {/* Simulant un crayon */}
+                          </button>
+                        )}
                         <button onClick={() => handleDelete(g.id)}
-                          className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600">
+                          className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
+                          title="Supprimer">
                           <Trash2 size={14} />
                         </button>
                       </div>

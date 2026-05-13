@@ -13,8 +13,18 @@ export default function ParentList() {
   const fetchParents = async () => {
     setLoading(true)
     try {
-      const { data } = await getParents({ search, actif: showArchives ? 0 : 1 })
-      setParents(data.parents || data.data || [])
+      // Pour les parents, on récupère tout et on filtre intelligemment
+      const { data } = await getParents({ search, actif: showArchives ? 0 : undefined })
+      let list = data.parents || data.data || []
+      
+      if (!showArchives) {
+        // Actifs (1) ou En attente (0 et pas encore lié à un élève officiellement)
+        list = list.filter(p => p.actif === 1 || (p.actif === 0 && !p.idParent))
+      } else {
+        // Archives : ceux qui sont explicitement à 0 mais qui ont un compte parent créé
+        list = list.filter(p => p.actif === 0 && p.idParent)
+      }
+      setParents(list)
     } catch { toast.error('Erreur chargement parents.') }
     finally { setLoading(false) }
   }
@@ -121,6 +131,9 @@ export default function ParentList() {
                         {p.prenom?.[0]}{p.nom?.[0]}
                       </div>
                       <p className="font-medium text-gray-900">{p.prenom} {p.nom}</p>
+                      {p.actif === 0 && (
+                        <span className="badge bg-amber-50 text-amber-600 text-[10px] py-0.5 px-1.5 ml-2">À valider</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-5 py-3.5 text-gray-600">{p.mobile}</td>

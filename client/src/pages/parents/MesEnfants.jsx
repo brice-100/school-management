@@ -223,13 +223,32 @@ function ExercicesSection({ matricule }) {
 function BulletinSection({ matricule }) {
   const { annees, selectedYear } = useYear()
   const [downloading,setDownloading]= useState(false)
+  const [loading,     setLoading]    = useState(false)
+  const [bulletin,    setBulletin]   = useState(null)
   const [trimestre,  setTrimestre]  = useState(1)
   const [annee,      setAnnee]      = useState(selectedYear?.libelle || '')
+ 
+  const fetchBulletin = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data } = await getBulletinData(matricule, { trimestre, annee_scolaire: annee })
+      setBulletin(data.data)
+    } catch { 
+      toast.error('Erreur chargement bulletin.') 
+      setBulletin(null)
+    } finally { 
+      setLoading(false) 
+    }
+  }, [matricule, trimestre, annee])
 
   useEffect(() => {
     if (selectedYear) setAnnee(selectedYear.libelle)
   }, [selectedYear])
 
+  useEffect(() => {
+    if (matricule && annee) fetchBulletin()
+  }, [fetchBulletin, matricule, annee])
+ 
   const handleDownload = async () => {
     setDownloading(true)
     try {
@@ -238,7 +257,7 @@ function BulletinSection({ matricule }) {
     } catch { toast.error('Erreur lors du téléchargement.') }
     finally { setDownloading(false) }
   }
-
+ 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -249,7 +268,7 @@ function BulletinSection({ matricule }) {
           <div className="flex gap-2">
             {[1, 2, 3].map(t => (
               <button key={t} onClick={() => setTrimestre(t)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all
+                className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all
                   ${trimestre === t ? 'bg-primary-500 text-white shadow-md shadow-primary-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                 T{t}
               </button>
@@ -261,29 +280,79 @@ function BulletinSection({ matricule }) {
             Année scolaire
           </label>
           <select value={annee} onChange={e => setAnnee(e.target.value)}
-            className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-2.5 text-sm font-medium focus:border-primary-300 outline-none">
+            className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-medium focus:border-primary-300 outline-none">
             {annees.map(a => <option key={a.idAnnee} value={a.libelle}>{a.libelle}</option>)}
           </select>
         </div>
       </div>
-
-      <div className="bg-gradient-to-br from-primary-50 to-blue-50 border border-primary-100 rounded-3xl p-8 text-center">
-        <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 text-primary-500">
-          <BookOpen size={32} />
+ 
+      {loading ? (
+        <div className="py-12 text-center space-y-4">
+          <RefreshCw className="animate-spin text-primary-500 mx-auto" size={32} />
+          <p className="text-gray-500">Génération de l'aperçu...</p>
         </div>
-        <h4 className="font-display text-xl font-bold text-gray-900 mb-2">Bulletin de notes officiel</h4>
-        <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">
-          Consultez le récapitulatif complet des performances de votre enfant pour la période sélectionnée.
-        </p>
-        <button
-          onClick={handleDownload}
-          disabled={downloading}
-          className="inline-flex items-center gap-2 px-8 py-3 bg-primary-500 text-white rounded-2xl font-bold shadow-lg shadow-primary-200 hover:bg-primary-600 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
-        >
-          <Download size={18} />
-          {downloading ? 'Préparation...' : 'Télécharger le bulletin'}
-        </button>
-      </div>
+      ) : bulletin ? (
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+           {/* Mini Aperçu du Bulletin */}
+           <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+             <h5 className="font-bold text-sm text-gray-700 uppercase">Aperçu - {bulletin.trimestre}e Trimestre</h5>
+             <button onClick={handleDownload} disabled={downloading} className="text-primary-600 font-bold text-xs flex items-center gap-1">
+               <Download size={14} /> {downloading ? '...' : 'PDF'}
+             </button>
+           </div>
+           
+           <div className="p-4 space-y-4 overflow-x-auto">
+              <table className="w-full text-[10px] border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 uppercase font-bold text-gray-600">
+                    <th className="border border-gray-200 p-1 text-left">Matière</th>
+                    <th className="border border-gray-200 p-1">SEQ1</th>
+                    <th className="border border-gray-200 p-1">SEQ2</th>
+                    <th className="border border-gray-200 p-1">COMP</th>
+                    <th className="border border-gray-200 p-1 bg-primary-50">MOY.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulletin.notes.map((n, i) => (
+                    <tr key={i}>
+                      <td className="border border-gray-200 p-1 font-semibold">{n.matiere_nom}</td>
+                      <td className="border border-gray-200 p-1 text-center">{n.seq1 ?? '—'}</td>
+                      <td className="border border-gray-200 p-1 text-center">{n.seq2 ?? '—'}</td>
+                      <td className="border border-gray-200 p-1 text-center">{n.comp ?? '—'}</td>
+                      <td className="border border-gray-200 p-1 text-center font-bold bg-primary-50/30">{(n.moyenne_matiere || 0).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-primary-500 text-white font-bold">
+                    <td className="border border-primary-600 p-1 uppercase">Moyenne Générale</td>
+                    <td colSpan={3} className="border border-primary-600 p-1"></td>
+                    <td className="border border-primary-600 p-1 text-center">{bulletin.moyenne} / 20</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                  <p className="text-[10px] text-indigo-500 font-bold uppercase mb-1">Position</p>
+                  <p className="text-xl font-black text-indigo-700">{bulletin.stats?.rang || '—'} <span className="text-xs font-normal">/ {bulletin.student.effectif || '—'}</span></p>
+                </div>
+                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                  <p className="text-[10px] text-emerald-500 font-bold uppercase mb-1">Mention</p>
+                  <p className="text-lg font-black text-emerald-700">{bulletin.mention}</p>
+                </div>
+              </div>
+           </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-primary-50 to-blue-50 border border-primary-100 rounded-3xl p-8 text-center">
+          <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 text-primary-500">
+            <BookOpen size={32} />
+          </div>
+          <h4 className="font-display text-xl font-bold text-gray-900 mb-2">Bulletin de notes</h4>
+          <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">
+            Aucun résultat trouvé pour ce trimestre.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

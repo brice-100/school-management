@@ -7,6 +7,7 @@ const { protect, restrictTo } = require('../middleware/authMiddleware');
 router.use(protect);
 
 router.get('/', coursController.getAll);
+router.get('/mes-cours', coursController.getMesCours);
 router.get('/:id', coursController.getOne);
 
 router.use(restrictTo('admin'));

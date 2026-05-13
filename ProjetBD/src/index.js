@@ -51,6 +51,7 @@ app.use('/api/planning',    require('./routes/planningRoutes'));
 app.use('/api/emploi-du-temps', require('./routes/planningRoutes'));
 app.use('/api/livres', require('./routes/livreRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
+app.use('/api/messages-internes', require('./routes/messageInterneRoutes'));
 app.use('/api/fiches-enseignant', require('./routes/salaireRoutes'));
 app.use('/api/salaires', require('./routes/salaireRoutes'));
 app.use('/api/enseignant/salaire', require('./routes/enseignantSalaireRoutes'));

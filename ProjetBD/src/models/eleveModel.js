@@ -22,6 +22,12 @@ const findAll = async (filters = {}) => {
   `;
   const params = [];
 
+  if (filters.classe_id !== undefined) {
+    query += ' AND s.idClasse = ?';
+    params.push(filters.classe_id);
+  }
+
+
   if (filters.actif !== undefined) {
     query += ' AND e.actif = ?';
     params.push(filters.actif);

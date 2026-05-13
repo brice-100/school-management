@@ -21,6 +21,17 @@ const findAll = async (filters = {}) => {
   return rows;
 };
 
+const findMesCours = async (idPers) => {
+  const [rows] = await pool.query(`
+    SELECT c.*, cl.libelle as classe_nom
+    FROM Cours c
+    JOIN Enseignant e ON c.idCours = e.idCours
+    LEFT JOIN Classe cl ON c.idClasse = cl.idClasse
+    WHERE e.idPers = ? AND c.actif = 1
+  `, [idPers]);
+  return rows;
+};
+
 const findById = async (idCours) => {
   const [rows] = await pool.query('SELECT * FROM Cours WHERE idCours = ?', [idCours]);
   return rows[0] || null;

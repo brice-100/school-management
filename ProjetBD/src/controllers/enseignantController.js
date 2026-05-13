@@ -84,7 +84,7 @@ const create = asyncHandler(async (req, res) => {
     if (salles.length > 0) {
       idSalle = salles[0].idSalle;
     } else {
-      const [res] = await pool.query('INSERT INTO Salle (libelle, idClasse, actif, idAdmin, created_at) VALUES (?, ?, 1, ?, NOW())', ['Salle Unique', classe_id, req.user.id]);
+      const [res] = await pool.query('INSERT INTO Salle (libelle, surface, idClasse, actif, idAdmin, created_at) VALUES (?, ?, ?, 1, ?, NOW())', ['Salle Unique', 'NON DEFINIE', classe_id, req.user.id]);
       idSalle = res.insertId;
     }
     await pool.query('INSERT INTO Titulaire (idPers, idSalle, actif, idAdmin, created_at) VALUES (?, ?, 1, ?, NOW())', [idPers, idSalle, req.user.id]);
@@ -126,7 +126,7 @@ const update = asyncHandler(async (req, res) => {
       if (salles.length > 0) {
         idSalle = salles[0].idSalle;
       } else {
-        const [res] = await pool.query('INSERT INTO Salle (libelle, idClasse, actif, idAdmin, created_at) VALUES (?, ?, 1, ?, NOW())', ['Salle Unique', req.body.classe_id, req.user.id]);
+        const [res] = await pool.query('INSERT INTO Salle (libelle, surface, idClasse, actif, idAdmin, created_at) VALUES (?, ?, ?, 1, ?, NOW())', ['Salle Unique', 'NON DEFINIE', req.body.classe_id, req.user.id]);
         idSalle = res.insertId;
       }
       await pool.query('INSERT INTO Titulaire (idPers, idSalle, actif, idAdmin, created_at) VALUES (?, ?, 1, ?, NOW())', [existing.idPers, idSalle, req.user.id]);
@@ -158,6 +158,7 @@ const updateStatut = asyncHandler(async (req, res) => {
     actif,
   });
 });
+
 
 /**
  * PATCH /api/enseignants/:idEnseignant/password
@@ -194,4 +195,79 @@ const remove = asyncHandler(async (req, res) => {
   return res.status(200).json({ message: 'Enseignant supprimé définitivement', idEnseignant });
 });
 
-module.exports = { getAll, getOne, create, update, updateStatut, updatePassword, remove };
+/**
+ * GET /api/enseignants/:idEnseignant/eleves
+ * Retourne la liste des élèves des classes où l'enseignant enseigne
+ */
+const getElevesEnseignant = asyncHandler(async (req, res) => {
+  const idEnseignant = parseInt(req.params.idEnseignant);
+  const pool = require('../config/db');
+
+  // Récupérer idPers de l'enseignant
+  const enseignant = await enseignantModel.findById(idEnseignant);
+  if (!enseignant) {
+    return res.status(404).json({ message: 'Enseignant introuvable' });
+  }
+
+  // Trouver les classes associées :
+  // 1. Via la table Titulaire (classe titulaire)
+  // 2. Via Cours → idClasse (cours enseigné)
+  const [rows] = await pool.query(`
+    SELECT DISTINCT
+      e.matricule,
+      e.nom,
+      e.prenom,
+      e.sexe,
+      e.photoURL AS photo,
+      e.actif,
+      cl.idClasse,
+      cl.libelle AS classe_nom,
+      e.dateNaissance
+    FROM Eleve e
+    JOIN Frequente f ON f.matricule = e.matricule
+    JOIN Salle s ON s.idSalle = f.idSalle
+    JOIN Classe cl ON cl.idClasse = s.idClasse
+    WHERE cl.idClasse IN (
+      -- Classes via le cours enseigné
+      SELECT c.idClasse FROM Cours c
+      JOIN Enseignant ens ON ens.idCours = c.idCours
+      WHERE ens.idPers = ?
+      UNION
+      -- Classes via Titulaire
+      SELECT sa.idClasse FROM Titulaire ti
+      JOIN Salle sa ON sa.idSalle = ti.idSalle
+      WHERE ti.idPers = ?
+    )
+    AND e.actif = 1
+    ORDER BY cl.libelle ASC, e.nom ASC, e.prenom ASC
+  `, [enseignant.idPers, enseignant.idPers]);
+
+
+  // Grouper par classe
+  const classeMap = {};
+  for (const row of rows) {
+    if (!classeMap[row.idClasse]) {
+      classeMap[row.idClasse] = {
+        idClasse: row.idClasse,
+        classe_nom: row.classe_nom,
+        eleves: []
+      };
+    }
+    classeMap[row.idClasse].eleves.push({
+      matricule: row.matricule,
+      nom: row.nom,
+      prenom: row.prenom,
+      sexe: row.sexe,
+      photo: row.photo,
+      actif: row.actif,
+      dateNaissance: row.dateNaissance,
+    });
+  }
+
+  const classes = Object.values(classeMap);
+  const total_eleves = rows.length;
+
+  return res.status(200).json({ total: total_eleves, classes, data: rows });
+});
+
+module.exports = { getAll, getOne, create, update, updateStatut, updatePassword, remove, getElevesEnseignant };

@@ -4,7 +4,7 @@ import { useYear } from '../../context/YearContext'
 import {
   LayoutDashboard, Users, GraduationCap, UserCheck,
   School, CreditCard, BookOpen, Calendar, FileText,
-  DollarSign, ShieldCheck, LogOut, ChevronRight, Bell, MessageSquare, AlertTriangle, Book, ClipboardCheck
+  DollarSign, ShieldCheck, LogOut, ChevronRight, Bell, MessageSquare, AlertTriangle, Book, ClipboardCheck, X
 } from 'lucide-react'
 
 const NAV_BY_ROLE = {
@@ -29,14 +29,15 @@ const NAV_BY_ROLE = {
   ],
   teacher: [
     { to: '/dashboard',      icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/teacher/eleves', icon: Users,           label: 'Mes élèves' },
     { to: '/grades',         icon: BookOpen,        label: 'Mes notes' },
     { to: '/planning',       icon: Calendar,        label: 'Mon planning' },
-    { to: '/students',       icon: Users,           label: 'Élèves' },
     { to: '/evaluations',    icon: ClipboardCheck,  label: 'Évaluations' },
     { to: '/bulletins',      icon: FileText,        label: 'Bulletins' },
     { to: '/mon-salaire',    icon: DollarSign,      label: 'Mon salaire' },
-    { to: '/messagerie',     icon: MessageSquare,   label: 'Messagerie' },
+    { to: '/teacher/messagerie', icon: MessageSquare, label: 'Messagerie Admin' },
   ],
+
   parent: [
     { to: '/dashboard',      icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/mon-enfant',     icon: Users,           label: 'Mes enfants' },
@@ -50,7 +51,7 @@ const NAV_BY_ROLE = {
 const ROLE_LABEL = { admin: 'Administrateur', teacher: 'Enseignant', parent: 'Parent' }
 const ROLE_DOT   = { admin: 'bg-yellow-400',  teacher: 'bg-emerald-400', parent: 'bg-blue-400' }
 
-export default function Sidebar() {
+export default function Sidebar({ mobile, onClose }) {
   const { user, logout } = useAuth()
   const { annees, selectedYear, changeYear, loading } = useYear()
   const navigate         = useNavigate()
@@ -58,10 +59,13 @@ export default function Sidebar() {
   const items            = NAV_BY_ROLE[role] || NAV_BY_ROLE.parent
   
   return (
-    <aside className="fixed left-0 top-0 h-screen w-60 bg-primary-500 flex flex-col z-30">
+    <aside className={`
+      ${mobile ? 'flex h-full' : 'hidden lg:flex lg:fixed lg:left-0 lg:top-0 lg:h-screen'}
+      w-60 bg-primary-500 flex-col z-30
+    `}>
 
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-primary-400/30">
+      <div className="px-6 py-5 border-b border-primary-400/30 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-accent-400 rounded-xl flex items-center justify-center">
             <School size={18} className="text-white" />
@@ -73,6 +77,11 @@ export default function Sidebar() {
             <p className="text-primary-300 text-xs">Gestion scolaire</p>
           </div>
         </div>
+        {mobile && (
+          <button onClick={onClose} className="lg:hidden p-2 text-primary-200 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       {/* Selecteur d'Année Académique */}
@@ -107,6 +116,7 @@ export default function Sidebar() {
       <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-0.5">
         {items.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
                transition-all duration-150

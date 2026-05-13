@@ -10,7 +10,7 @@ const findAll = async (filters = {}) => {
       p.idPers, p.idPers AS id, p.nom, p.prenom, p.dateNaissance, p.lieuNaissance,
       p.mobile, p.mobile AS telephone, p.phone, p.username, p.username AS email, 
       p.alanyaID, p.created_at, p.actif AS person_actif,
-      e.idEnseignant, e.idCours, e.Actif AS actif,
+      e.idEnseignant, COALESCE(e.idEnseignant, p.idPers) AS id, e.idCours, e.Actif AS actif,
       c.libelle AS matiere_nom,
       COALESCE(
         (SELECT cl.libelle FROM Titulaire ti JOIN Salle sa ON ti.idSalle = sa.idSalle JOIN Classe cl ON sa.idClasse = cl.idClasse WHERE ti.idPers = p.idPers LIMIT 1),
@@ -25,7 +25,7 @@ const findAll = async (filters = {}) => {
   const params = [];
 
   if (filters.actif !== undefined) {
-    query += ' AND e.Actif = ?';
+    query += ' AND COALESCE(e.Actif, p.actif) = ?';
     params.push(filters.actif);
   }
 
@@ -50,7 +50,7 @@ const findById = async (idEnseignant) => {
     `SELECT
        p.idPers, p.idPers AS id, p.nom, p.prenom, p.dateNaissance, p.lieuNaissance,
        p.mobile, p.mobile AS telephone, p.phone, p.username, p.username AS email, p.alanyaID, p.created_at, p.photo,
-       e.idEnseignant, e.idCours, e.Actif AS actif,
+       e.idEnseignant, COALESCE(e.idEnseignant, p.idPers) AS id, e.idCours, e.Actif AS actif,
        c.libelle AS matiere_nom,
        (SELECT cl.idClasse FROM Titulaire ti JOIN Salle sa ON ti.idSalle = sa.idSalle JOIN Classe cl ON sa.idClasse = cl.idClasse WHERE ti.idPers = p.idPers LIMIT 1) AS classe_id,
        COALESCE(
@@ -192,12 +192,26 @@ const updateCours = async (idEnseignant, idCours) => {
  * @param {number} idEnseignant
  * @param {number} actif - 0 ou 1
  */
-const setActif = async (idEnseignant, actif) => {
-  const [result] = await pool.query(
-    'UPDATE Enseignant SET Actif = ? WHERE idEnseignant = ?',
-    [actif, idEnseignant]
-  );
-  return result.affectedRows;
+const setActif = async (id, actif) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // 1. On cherche l'idPers lié si c'est un idEnseignant
+    const [ens] = await conn.query('SELECT idPers FROM Enseignant WHERE idEnseignant = ?', [id]);
+    const actualIdPers = ens.length > 0 ? ens[0].idPers : id;
+
+    // 2. On met à jour les deux tables
+    await conn.query('UPDATE Enseignant SET Actif = ? WHERE idEnseignant = ? OR idPers = ?', [actif, id, actualIdPers]);
+    await conn.query('UPDATE Personne SET actif = ? WHERE idPers = ?', [actif, actualIdPers]);
+
+    await conn.commit();
+    return 1;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 };
 
 /**

@@ -10,6 +10,11 @@ const getAll = asyncHandler(async (req, res) => {
   return res.status(200).json({ total: cours.length, data: cours });
 });
 
+const getMesCours = asyncHandler(async (req, res) => {
+  const cours = await coursModel.findMesCours(req.user.idPers);
+  return res.status(200).json({ total: cours.length, data: cours });
+});
+
 const getOne = asyncHandler(async (req, res) => {
   const cours = await coursModel.findById(parseInt(req.params.id));
   if (!cours) return res.status(404).json({ message: 'Cours introuvable' });
@@ -48,4 +53,4 @@ const remove = asyncHandler(async (req, res) => {
   return res.status(200).json({ message: 'Cours supprimé' });
 });
 
-module.exports = { getAll, getOne, create, update, updateStatut, remove };
+module.exports = { getAll, getMesCours, getOne, create, update, updateStatut, remove };

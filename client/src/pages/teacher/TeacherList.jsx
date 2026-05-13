@@ -16,8 +16,30 @@ export default function TeacherList() {
     // Ne pas mettre loading à true si on a déjà des données (évite le flash blanc)
     if (teachers.length === 0) setLoading(true)
     try {
-      const { data } = await getTeachers({ search, actif: showArchives ? 0 : 1 })
-      const list = data.enseignants || data.data || []
+      const { data } = await getTeachers({ search, actif: showArchives ? 0 : undefined })
+      let list = data.enseignants || data.data || []
+      
+      // Si on n'est pas dans les archives, on veut les actifs (1) ET les nouveaux (0)
+      // Mais attention, getTeachers avec actif: undefined pourrait retourner tout.
+      // On va filtrer côté client pour être sûr si besoin, ou ajuster le backend.
+      if (!showArchives) {
+        // On récupère tout et on filtre intelligemment
+        const { data: allData } = await getTeachers({ search })
+        const allList = allData.enseignants || allData.data || []
+        
+        // Sont considérés comme "Actifs" ou "À valider" :
+        // 1. Ceux qui sont actifs (1) dans l'une des deux tables
+        // 2. Ceux qui sont en attente (0) dans Personne (auto-inscription)
+        list = allList.filter(t => 
+          t.actif === 1 || 
+          t.person_actif === 1 || 
+          (t.person_actif === 0 && !t.idEnseignant) // Nouveau compte auto-inscrit
+        )
+      } else {
+        // Archives : ceux qui sont explicitement désactivés dans Enseignant
+        list = list.filter(t => t.actif === 0 && t.idEnseignant)
+      }
+
       setTeachers(list)
     } catch { 
       toast.error('Erreur chargement enseignants.') 
@@ -63,19 +85,19 @@ export default function TeacherList() {
 
   return (
     <div className="page-container">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-gray-900">
+          <h1 className="font-display text-xl sm:text-2xl font-semibold text-gray-900">
             {showArchives ? 'Archives des enseignants' : 'Enseignants'}
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">{teachers.length} enseignant(s) {showArchives ? 'archivé(s)' : ''}</p>
+          <p className="text-gray-500 text-xs sm:text-sm mt-0.5">{teachers.length} enseignant(s) {showArchives ? 'archivé(s)' : ''}</p>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => setShowArchives(!showArchives)} className="btn-secondary">
-            {showArchives ? 'Voir les actifs' : 'Voir les archives'}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowArchives(!showArchives)} className="btn-secondary text-xs sm:text-sm py-1.5 px-3">
+            {showArchives ? 'Actifs' : 'Archives'}
           </button>
           {!showArchives && (
-            <Link to="/teachers/new" className="btn-primary">
+            <Link to="/teachers/new" className="btn-primary flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs sm:text-sm py-1.5 px-3">
               <Plus size={16} /> Ajouter
             </Link>
           )}
@@ -117,14 +139,15 @@ export default function TeacherList() {
             )}
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {['Enseignant', 'Email', 'Téléphone', 'Classe', 'Matière', 'Actions'].map(h => (
-                  <th key={h} className="text-left font-medium text-gray-500 px-5 py-3.5">{h}</th>
-                ))}
-              </tr>
-            </thead>
+          <div className="table-responsive">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  {['Enseignant', 'Email', 'Téléphone', 'Classe', 'Matière', 'Actions'].map(h => (
+                    <th key={h} className="text-left font-medium text-gray-500 px-5 py-3.5 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
             <tbody className="divide-y divide-gray-50">
               {teachers.map((t) => (
                 <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
@@ -137,6 +160,9 @@ export default function TeacherList() {
                           </div>
                       }
                       <p className="font-medium text-gray-900">{t.prenom} {t.nom}</p>
+                      {(t.actif === 0 || t.person_actif === 0) && (
+                        <span className="badge bg-amber-50 text-amber-600 text-[10px] py-0.5 px-1.5 ml-2">À valider</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-5 py-3.5 text-gray-600">{t.email || '—'}</td>
@@ -198,6 +224,7 @@ export default function TeacherList() {
               ))}
             </tbody>
           </table>
+        </div>
         )}
       </div>
 

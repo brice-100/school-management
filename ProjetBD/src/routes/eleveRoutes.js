@@ -36,7 +36,7 @@ const eleveValidation = [
  * Accessible : admin (tous types) + administratif (typePersonne=2) + scolarité (3)
  */
 router.get('/',
-  allowAny({ admins: [0, 1, 2, 3], personnes: [2, 3] }),
+  allowAny({ admins: [0, 1, 2, 3], personnes: [1, 2, 3] }),
   [
     query('actif').optional().isIn(['0', '1']).withMessage('actif doit être 0 ou 1'),
     query('idAdmin').optional().isInt({ min: 1 }).withMessage('idAdmin invalide'),

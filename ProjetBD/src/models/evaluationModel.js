@@ -78,4 +78,13 @@ const remove = async (idEval) => {
   return result.affectedRows;
 };
 
-module.exports = { findAll, findById, create, update, remove };
+const valider = async (ids) => {
+  if (!ids || ids.length === 0) return 0;
+  const [result] = await pool.query(
+    'UPDATE Evaluation SET valider = 1 WHERE idEval IN (?)',
+    [ids]
+  );
+  return result.affectedRows;
+};
+
+module.exports = { findAll, findById, create, update, remove, valider };

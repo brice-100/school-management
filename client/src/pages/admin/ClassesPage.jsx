@@ -51,47 +51,49 @@ function RefTable({ title, items, fields, onAdd, onEdit, onDelete,
             Aucun(e) {title.toLowerCase()} enregistré(e).
           </p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {fields.map(({ label }) => (
-                  <th key={label} className="text-left font-medium text-gray-500 px-5 py-3">{label}</th>
-                ))}
-                {extraActions && (
-                  <th className="text-left font-medium text-gray-500 px-5 py-3">Info</th>
-                )}
-                <th className="text-right font-medium text-gray-500 px-5 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {items.map(item => {
-                const itemId = getId(item)
-                return (
-                  <tr key={itemId}
-                    className={`hover:bg-gray-50/50 transition-colors
-                      ${editId === itemId ? 'bg-blue-50/40' : ''}`}>
-                    {fields.map(({ key }) => (
-                      <td key={key} className="px-5 py-3.5 text-gray-700">{item[key] ?? '—'}</td>
-                    ))}
-                    {extraActions && (
-                      <td className="px-5 py-3.5">{extraActions(item)}</td>
-                    )}
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => onEdit(item)} className="btn-icon">
-                          <Pencil size={14}/>
-                        </button>
-                        <button onClick={() => onDelete(itemId)}
-                          className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600">
-                          <Trash2 size={14}/>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <div className="table-responsive">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  {fields.map(({ label }) => (
+                    <th key={label} className="text-left font-medium text-gray-500 px-5 py-3 whitespace-nowrap">{label}</th>
+                  ))}
+                  {extraActions && (
+                    <th className="text-left font-medium text-gray-500 px-5 py-3 whitespace-nowrap">Info</th>
+                  )}
+                  <th className="text-right font-medium text-gray-500 px-5 py-3 whitespace-nowrap">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {items.map(item => {
+                  const itemId = getId(item)
+                  return (
+                    <tr key={itemId}
+                      className={`hover:bg-gray-50/50 transition-colors
+                        ${editId === itemId ? 'bg-blue-50/40' : ''}`}>
+                      {fields.map(({ key }) => (
+                        <td key={key} className="px-5 py-3.5 text-gray-700 whitespace-nowrap">{item[key] ?? '—'}</td>
+                      ))}
+                      {extraActions && (
+                        <td className="px-5 py-3.5 whitespace-nowrap">{extraActions(item)}</td>
+                      )}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => onEdit(item)} className="btn-icon">
+                            <Pencil size={14}/>
+                          </button>
+                          <button onClick={() => onDelete(itemId)}
+                            className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600">
+                            <Trash2 size={14}/>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
@@ -365,16 +367,18 @@ export default function ClassesPage() {
       )}
 
       {/* Onglets */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all
-              ${tab === t.key
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'}`}>
-            {t.label}
-          </button>
-        ))}
+      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-full overflow-x-auto">
+        <div className="flex min-w-max gap-1">
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`px-4 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap
+                ${tab === t.key
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === 'classes' && (

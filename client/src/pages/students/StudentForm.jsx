@@ -118,12 +118,12 @@ export default function StudentForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="form-label">Prénom *</label>
-              <input {...register('prenom')} placeholder="Marie" className="input-field" />
+              <input {...register('prenom')} placeholder="Ariane" className="input-field" />
               <FieldError msg={errors.prenom?.message} />
             </div>
             <div>
               <label className="form-label">Nom *</label>
-              <input {...register('nom')} placeholder="Dupont" className="input-field" />
+              <input {...register('nom')} placeholder="Nsangou" className="input-field" />
               <FieldError msg={errors.nom?.message} />
             </div>
             <div>
@@ -139,11 +139,10 @@ export default function StudentForm() {
               <select {...register('sexe')} className="select-field">
                 <option value="0">Fille</option>
                 <option value="1">Garçon</option>
-                <option value="2">Autres</option>
               </select>
             </div>
             <div>
-              <label className="form-label">Langue</label>
+              <label className="form-label">première langue</label>
               <input {...register('langue')} placeholder="Ex: Français" className="input-field" />
             </div>
             <div>

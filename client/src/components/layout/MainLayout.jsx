@@ -28,7 +28,7 @@ export default function MainLayout({ children }) {
         lg:hidden
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <Sidebar onClose={() => setSidebarOpen(false)} />
+        <Sidebar mobile={true} onClose={() => setSidebarOpen(false)} />
       </div>
 
       {/* Contenu principal */}

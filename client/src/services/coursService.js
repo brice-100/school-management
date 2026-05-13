@@ -2,7 +2,7 @@ import api from './api'
 
 // ── Cours ─────────────────────────────────────────────────────────
 export const getCours          = (params)   => api.get('/matieres', { params })
-export const getMesCours       = ()         => api.get('/enseignant/mes-cours')
+export const getMesCours       = ()         => api.get('/matieres/mes-cours')
 export const createCours       = (data)     => api.post('/matieres', data)
 export const updateCours       = (id, data) => api.put(`/matieres/${id}`, data)
 export const deleteCours       = (id)       => api.delete(`/matieres/${id}`)

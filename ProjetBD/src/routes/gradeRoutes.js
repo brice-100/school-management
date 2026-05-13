@@ -60,8 +60,22 @@ router.post('/', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * PATCH /api/grades/valider
+ * Valider une liste de notes
+ */
+router.patch('/valider', asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) {
+    return res.status(400).json({ message: 'Liste d\'identifiants invalide' });
+  }
+  await evaluationModel.valider(ids);
+  return res.status(200).json({ message: `${ids.length} note(s) validée(s)` });
+}));
+
+/**
  * DELETE /api/grades/:id
  */
+
 router.delete('/:id', asyncHandler(async (req, res) => {
   await evaluationModel.remove(parseInt(req.params.id));
   return res.status(200).json({ message: 'Note supprimée' });

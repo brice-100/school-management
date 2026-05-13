@@ -33,12 +33,12 @@ const findById = async (idParent) => {
         JSON_OBJECT('matricule', e.matricule, 'nom', e.nom, 'prenom', e.prenom)
       ) as enfants
     FROM Personne p
-    JOIN Parents pa ON p.idPers = pa.idPers
+    LEFT JOIN Parents pa ON p.idPers = pa.idPers
     LEFT JOIN Eleve e ON pa.matricule = e.matricule
-    WHERE pa.idParent = ?
+    WHERE (pa.idParent = ? OR p.idPers = ?)
     GROUP BY p.idPers, pa.idParent
     LIMIT 1
-  `, [idParent]);
+  `, [idParent, idParent]);
   return rows[0] || null;
 };
 
@@ -91,11 +91,25 @@ const updatePersonne = async (idPers, data) => {
   return result.affectedRows;
 };
 
-const setActif = async (idParent, actif) => {
-  const parent = await findById(idParent);
-  if (!parent) return 0;
-  const [result] = await pool.query('UPDATE Personne SET actif = ? WHERE idPers = ?', [actif, parent.idPers]);
-  return result.affectedRows;
+const setActif = async (id, actif) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // 1. On cherche l'idPers lié si c'est un idParent
+    const [pa] = await conn.query('SELECT idPers FROM Parents WHERE idParent = ?', [id]);
+    const actualIdPers = pa.length > 0 ? pa[0].idPers : id;
+
+    // 2. On met à jour Personne
+    await conn.query('UPDATE Personne SET actif = ? WHERE idPers = ?', [actif, actualIdPers]);
+
+    await conn.commit();
+    return 1;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 };
 
 const findChildrenByParentIdPers = async (idPers) => {

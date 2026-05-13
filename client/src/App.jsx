@@ -37,6 +37,9 @@ import LibraryPage       from './pages/admin/LibraryPage'
 import EmploiDuTemps     from './pages/admin/EmploiDuTemps'
 import SalaryTeacherPage from './pages/admin/SalaryTeacherPage'
 import ChangePassword    from './pages/auth/ChangePassword'
+import TeacherMessaging from './pages/teacher/TeacherMessaging'
+import TeacherStudents from './pages/teacher/TeacherStudents'
+
 
 import { YearProvider } from './context/YearContext'
 
@@ -98,6 +101,9 @@ export default function App() {
 <Route path="/emploi-du-temps"     element={<AT c={<EmploiDuTemps/>} />}    />
 <Route path="/mon-salaire"         element={<AT c={<SalaryTeacherPage/>} />}   />
 <Route path="/change-password"     element={<Adm c={<ChangePassword/>} />}  />
+<Route path="/teacher/messagerie"  element={<Any c={<TeacherMessaging />} />} />
+<Route path="/teacher/eleves"      element={<AT  c={<TeacherStudents />} />} />
+
           {/* Redirections */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/unauthorized" element={

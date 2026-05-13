@@ -120,6 +120,18 @@ router.patch('/:idEnseignant/password',
 );
 
 /**
+ * GET /api/enseignants/:idEnseignant/eleves
+ * Liste des élèves des classes où enseigne cet enseignant
+ * Accessible : admin + enseignant concerné
+ */
+router.get('/:idEnseignant/eleves',
+  allowAny({ admins: [0, 1, 2, 3], personnes: [1, 2, 3] }),
+  [param('idEnseignant').isInt({ min: 1 }).withMessage('idEnseignant invalide')],
+  validate,
+  enseignantController.getElevesEnseignant
+);
+
+/**
  * DELETE /api/enseignants/:idEnseignant
  * Suppression définitive — root/admin uniquement
  */

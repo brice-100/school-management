@@ -11,3 +11,6 @@ export const updateTeacher = (id, formData) => api.put(`/enseignants/${id}`, for
 export const deleteTeacher = (id) => api.patch(`/enseignants/${id}/statut`, { actif: 0 })
 export const restoreTeacher = (id) => api.patch(`/enseignants/${id}/statut`, { actif: 1 })
 export const hardDeleteTeacher = (id) => api.delete(`/enseignants/${id}`)
+
+// Liste des élèves des classes où un enseignant enseigne
+export const getTeacherStudents = (id) => api.get(`/enseignants/${id}/eleves`)

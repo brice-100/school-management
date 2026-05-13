@@ -10,7 +10,7 @@ import {
   getNaturesEpreuve, getSessionsActives,
   createSession, getTrimestres, getSessions,
 } from '../../services/evaluationService'
-import { getCours, getElevesParCours } from '../../services/coursService'
+import { getCours, getMesCours, getElevesParCours } from '../../services/coursService'
 import { getStudents } from '../../services/studentService'
 
 import { filterDeleted } from '../../services/deleteConfig'
@@ -659,8 +659,9 @@ export default function EvaluationPage() {
   const [natures,    setNatures]    = useState([])
 
   useEffect(() => {
+    const isTeacher = user?.typePersonne === 1;
     Promise.all([
-      getCours({}),
+      isTeacher ? getMesCours() : getCours({}),
       getSessionsActives(),
       getNaturesEpreuve(),
     ]).then(([c, s, n]) => {
