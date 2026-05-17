@@ -12,7 +12,7 @@ const MOIS_LABELS = {
   '09':'Septembre','10':'Octobre','11':'Novembre','12':'Décembre'
 }
 const MOIS_OPTIONS = Object.entries(MOIS_LABELS)
-const ANNEES       = ['2025', '2024', '2023']
+const ANNEES = [String(new Date().getFullYear()), '2025', '2024', '2023']
 
 function RecapCard({ label, value, color = 'text-gray-900' }) {
   return (
@@ -206,7 +206,9 @@ export default function SalaryList() {
                 className="select-field">
                 <option value="">— Choisir —</option>
                 {teachers.map(t => (
-                  <option key={t.id} value={t.id}>{t.prenom} {t.nom}</option>
+                  <option key={t.idEnseignant || t.id} value={t.idEnseignant || t.id}>
+                    {t.prenom} {t.nom}
+                  </option>
                 ))}
               </select>
             </div>

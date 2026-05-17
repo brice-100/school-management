@@ -5,9 +5,9 @@ const findAll = async (filters = {}) => {
     SELECT co.*, c.libelle as classe_nom 
     FROM Cours co
     LEFT JOIN Classe c ON co.idClasse = c.idClasse
-    WHERE 1=1
+    WHERE co.isDeleted = ?
   `;
-  const params = [];
+  const params = [filters.isDeleted !== undefined ? filters.isDeleted : 0];
   if (filters.actif !== undefined) {
     query += ' AND co.actif = ?';
     params.push(filters.actif);
@@ -33,7 +33,7 @@ const findMesCours = async (idPers) => {
 };
 
 const findById = async (idCours) => {
-  const [rows] = await pool.query('SELECT * FROM Cours WHERE idCours = ?', [idCours]);
+  const [rows] = await pool.query('SELECT * FROM Cours WHERE idCours = ? AND isDeleted = 0', [idCours]);
   return rows[0] || null;
 };
 
@@ -59,8 +59,26 @@ const setActif = async (idCours, actif) => {
 };
 
 const remove = async (idCours) => {
-  const [result] = await pool.query('DELETE FROM Cours WHERE idCours = ?', [idCours]);
+  const [result] = await pool.query('UPDATE Cours SET isDeleted = 1 WHERE idCours = ?', [idCours]);
   return result.affectedRows;
 };
 
-module.exports = { findAll, findById, create, update, setActif, remove };
+const restore = async (idCours) => {
+  const [result] = await pool.query('UPDATE Cours SET isDeleted = 0 WHERE idCours = ?', [idCours]);
+  return result.affectedRows;
+};
+
+const findElevesParCours = async (idCours) => {
+  const [rows] = await pool.query(`
+    SELECT e.matricule, e.nom, e.prenom
+    FROM Eleve e
+    JOIN Frequente f ON e.matricule = f.matricule
+    JOIN Salle s ON f.idSalle = s.idSalle
+    JOIN Cours c ON s.idClasse = c.idClasse
+    WHERE c.idCours = ? AND e.actif = 1
+    GROUP BY e.matricule
+  `, [idCours]);
+  return rows;
+};
+
+module.exports = { findAll, findMesCours, findById, create, update, setActif, remove, restore, findElevesParCours };

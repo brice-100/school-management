@@ -3,7 +3,10 @@ const asyncHandler = require('../utils/asyncHandler');
 const classeModel = require('../models/classeModel');
 
 const getAll = asyncHandler(async (req, res) => {
-  const classes = await classeModel.findAll();
+  const filters = {};
+  if (req.query.archives === '1') filters.isDeleted = 1;
+  else filters.isDeleted = 0;
+  const classes = await classeModel.findAll(filters);
   return res.status(200).json({ total: classes.length, data: classes });
 });
 
@@ -30,7 +33,12 @@ const update = asyncHandler(async (req, res) => {
 
 const remove = asyncHandler(async (req, res) => {
   await classeModel.remove(parseInt(req.params.id));
-  return res.status(200).json({ message: 'Classe supprimée' });
+  return res.status(200).json({ message: 'Classe supprimée logiquement' });
 });
 
-module.exports = { getAll, getOne, create, update, remove };
+const restore = asyncHandler(async (req, res) => {
+  await classeModel.restore(parseInt(req.params.id));
+  return res.status(200).json({ message: 'Classe restaurée avec succès' });
+});
+
+module.exports = { getAll, getOne, create, update, remove, restore };

@@ -29,9 +29,17 @@ const login = asyncHandler(async (req, res) => {
     return res.status(401).json({ message: INVALID_CREDENTIALS });
   }
 
-  // ─── 2. Vérifier l'activation (pour les Personnes) ─────────────
-  if (userType === 'personne' && user.actif === 0) {
-    return res.status(403).json({ message: 'Votre compte est en attente de validation.' });
+  // ─── 2. Vérifier l'activation (pour les Personnes : enseignants, parents, etc.) ─────────────
+  if (userType !== 'admin') {
+    if (user.actif === 0) {
+      return res.status(403).json({ message: 'Votre compte est en attente de validation.' });
+    }
+    if (user.actif === 2) {
+      return res.status(403).json({ message: 'Votre compte est suspendu. Veuillez contacter l\'administration.' });
+    }
+    if (user.actif !== 1) {
+      return res.status(403).json({ message: 'Votre compte n\'est pas actif.' });
+    }
   }
 
   // ─── 3. Vérifier le mot de passe ──────────────────────────
@@ -67,6 +75,7 @@ const login = asyncHandler(async (req, res) => {
     };
     userData = {
       id:           user.idPers,
+      idPers:       user.idPers, // Pour compatibilité frontend
       nom:          user.nom,
       prenom:       user.prenom,
       typePersonne: user.typePersonne,
@@ -102,7 +111,12 @@ const me = asyncHandler(async (req, res) => {
   } else {
     user = await personneModel.findById(id);
     if (user) {
-      userData = { ...user, role: user.typePersonne === 1 ? 'teacher' : (user.typePersonne === 4 ? 'parent' : 'autre') };
+      userData = { 
+        ...user, 
+        id: user.idPers,
+        idPers: user.idPers,
+        role: user.typePersonne === 1 ? 'teacher' : (user.typePersonne === 4 ? 'parent' : 'autre') 
+      };
     }
   }
 

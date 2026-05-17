@@ -17,5 +17,7 @@ router.post('/', uploadMiddleware.handleUpload(uploadMiddleware.uploadUserPhoto)
 router.put('/:id', uploadMiddleware.handleUpload(uploadMiddleware.uploadUserPhoto), parentController.update);
 router.patch('/:id/statut', parentController.updateStatut);
 router.delete('/:id', parentController.remove);
+router.delete('/:id/hard', parentController.removeHard);
+router.patch('/:id/restaurer', parentController.restore);
 
 module.exports = router;

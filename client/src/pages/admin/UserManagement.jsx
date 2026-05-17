@@ -132,7 +132,7 @@ export default function UserManagement() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {users.map((u) => {
-                const s = STATUT_STYLE[u.statut]
+                const s = STATUT_STYLE[u.statut] || STATUT_STYLE.en_attente
                 const r = ROLE_STYLE[u.role]
                 return (
                   <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">

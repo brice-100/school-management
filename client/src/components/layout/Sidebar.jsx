@@ -25,7 +25,6 @@ const NAV_BY_ROLE = {
     { to: '/bibliotheque',   icon: Book,            label: 'Bibliothèque' },
     { to: '/rapports',       icon: AlertTriangle,   label: 'Discipline' },
     { to: '/messagerie',     icon: MessageSquare,   label: 'Messagerie' },
-    { to: '/notifications',  icon: Bell,            label: 'Notifications' },
   ],
   teacher: [
     { to: '/dashboard',      icon: LayoutDashboard, label: 'Dashboard' },
@@ -44,7 +43,6 @@ const NAV_BY_ROLE = {
     { to: '/bulletins',      icon: FileText,        label: 'Bulletins' },
     { to: '/paiements',      icon: CreditCard,      label: 'Mes paiements' },
     { to: '/messagerie',     icon: MessageSquare,   label: 'Messagerie' },
-    { to: '/notifications',  icon: Bell,            label: 'Notifications' },
   ],
 }
 

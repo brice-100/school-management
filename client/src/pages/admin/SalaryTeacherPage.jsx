@@ -8,14 +8,14 @@ const fmt = (n) => Number(n || 0).toLocaleString('fr-FR') + ' FCFA'
 
 const STATUT_CONFIG = {
   disponible: { label:'Disponible', cls:'bg-emerald-50 text-emerald-700 border-emerald-200', icon:CheckCircle, iconCls:'text-emerald-500', desc:"Votre salaire est disponible. Vous pouvez faire une demande de décaissement." },
-  en_attente: { label:'En attente', cls:'bg-amber-50 text-amber-700 border-amber-200',       icon:Clock,        iconCls:'text-amber-500',   desc:"Votre demande est en cours de traitement par l'administration." },
-  verse:      { label:'Versé',      cls:'bg-blue-50 text-blue-700 border-blue-200',           icon:Wallet,       iconCls:'text-blue-500',    desc:"Votre salaire a été versé ce mois-ci." },
+  'en attente': { label:'En attente', cls:'bg-amber-50 text-amber-700 border-amber-200',       icon:Clock,        iconCls:'text-amber-500',   desc:"Votre demande est en cours de traitement par l'administration." },
+  'payé':      { label:'Versé',      cls:'bg-blue-50 text-blue-700 border-blue-200',           icon:Wallet,       iconCls:'text-blue-500',    desc:"Votre salaire a été versé ce mois-ci." },
 }
 
 const STATUT_ROW = {
-  verse:      { label:'Versé',      cls:'bg-blue-50 text-blue-700'     },
+  'payé':      { label:'Versé',      cls:'bg-blue-50 text-blue-700'     },
   disponible: { label:'Disponible', cls:'bg-emerald-50 text-emerald-700'},
-  en_attente: { label:'En attente', cls:'bg-amber-50 text-amber-700'   },
+  'en attente': { label:'En attente', cls:'bg-amber-50 text-amber-700'   },
 }
 
 export default function SalaryTeacherPage() {
@@ -57,8 +57,8 @@ export default function SalaryTeacherPage() {
     finally { setRequesting(false) }
   }
 
-  const totalVerse  = historique.filter(s => s.statut === 'verse').reduce((a, s) => a + parseFloat(s.points || 0), 0)
-  const dernierVerse= historique.find(s => s.statut === 'verse')
+  const totalVerse  = historique.filter(s => s.statut === 'payé').reduce((a, s) => a + parseFloat(s.points || 0), 0)
+  const dernierVerse= historique.find(s => s.statut === 'payé')
 
   // ── Carte statut ────────────────────────────────────────────
   const StatutCard = () => {
@@ -84,7 +84,7 @@ export default function SalaryTeacherPage() {
       </div>
     )
 
-    const cfg  = STATUT_CONFIG[statut.statut] ?? STATUT_CONFIG['en_attente']
+    const cfg  = STATUT_CONFIG[statut.statut] ?? STATUT_CONFIG['en attente']
     const Icon = cfg.icon
     const borderCls = cfg.cls.split(' ').find(c => c.startsWith('border')) || 'border-gray-200'
 
@@ -92,7 +92,7 @@ export default function SalaryTeacherPage() {
       <div className={`card p-6 mb-6 border ${borderCls}`}>
         <div className="flex items-start gap-4">
           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0
-            ${statut.statut === 'verse' ? 'bg-blue-100' : statut.statut === 'disponible' ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+            ${statut.statut === 'payé' ? 'bg-blue-100' : statut.statut === 'disponible' ? 'bg-emerald-100' : 'bg-amber-100'}`}>
             <Icon size={22} className={cfg.iconCls} />
           </div>
           <div className="flex-1">
@@ -112,13 +112,13 @@ export default function SalaryTeacherPage() {
                 {requesting ? 'Envoi...' : 'Demander le décaissement'}
               </button>
             )}
-            {statut.statut === 'en_attente' && (
+            {statut.statut === 'en attente' && (
               <div className="flex items-center gap-2 text-amber-600 text-sm">
                 <Clock size={15} className="animate-pulse" />
                 En attente de validation par l'administration
               </div>
             )}
-            {statut.statut === 'verse' && (
+            {statut.statut === 'payé' && (
               <div className="flex items-center gap-2 text-blue-600 text-sm">
                 <CheckCircle size={15} /> Salaire versé avec succès
               </div>
@@ -195,14 +195,14 @@ export default function SalaryTeacherPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {historique.map(s => {
-                const st = STATUT_ROW[s.statut] ?? STATUT_ROW['en_attente']
+                const st = STATUT_ROW[s.statut] ?? STATUT_ROW['en attente']
                 return (
                   <tr key={s.idRap} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0
-                          ${s.statut==='verse'?'bg-blue-50':s.statut==='disponible'?'bg-emerald-50':'bg-amber-50'}`}>
-                          <Wallet size={15} className={s.statut==='verse'?'text-blue-500':s.statut==='disponible'?'text-emerald-500':'text-amber-500'} />
+                          ${s.statut==='payé'?'bg-blue-50':s.statut==='disponible'?'bg-emerald-50':'bg-amber-50'}`}>
+                          <Wallet size={15} className={s.statut==='payé'?'text-blue-500':s.statut==='disponible'?'text-emerald-500':'text-amber-500'} />
                         </div>
                         <p className="font-medium text-gray-900">{s.libelle}</p>
                       </div>

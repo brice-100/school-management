@@ -6,6 +6,8 @@ const getAll = asyncHandler(async (req, res) => {
   const filters = {};
   if (req.query.actif !== undefined) filters.actif = parseInt(req.query.actif);
   if (req.query.idAnnee) filters.idAnnee = parseInt(req.query.idAnnee);
+  if (req.query.archives === '1') filters.isDeleted = 1;
+  else filters.isDeleted = 0;
   const cours = await coursModel.findAll(filters);
   return res.status(200).json({ total: cours.length, data: cours });
 });
@@ -25,7 +27,7 @@ const create = asyncHandler(async (req, res) => {
   let idAnnee = req.body.idAnnee;
   if (!idAnnee) {
     const pool = require('../config/db');
-    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
+    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE statut = 1 LIMIT 1');
     idAnnee = annees.length > 0 ? annees[0].idAnnee : 1;
   }
   const data = { ...req.body, idAdmin: req.user.id, idAnnee };
@@ -50,7 +52,12 @@ const updateStatut = asyncHandler(async (req, res) => {
 
 const remove = asyncHandler(async (req, res) => {
   await coursModel.remove(parseInt(req.params.id));
-  return res.status(200).json({ message: 'Cours supprimé' });
+  return res.status(200).json({ message: 'Cours supprimé logiquement' });
 });
 
-module.exports = { getAll, getMesCours, getOne, create, update, updateStatut, remove };
+const restore = asyncHandler(async (req, res) => {
+  await coursModel.restore(parseInt(req.params.id));
+  return res.status(200).json({ message: 'Cours restauré avec succès' });
+});
+
+module.exports = { getAll, getMesCours, getOne, create, update, updateStatut, remove, restore };

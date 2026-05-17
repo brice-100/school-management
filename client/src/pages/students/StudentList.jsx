@@ -19,7 +19,7 @@ export default function StudentList() {
     try {
       const { data } = await getStudents({ 
         search, 
-        actif: showArchives ? 0 : 1,
+        archives: showArchives ? 1 : 0,
         idAnnee: selectedYear?.idAnnee
       });
       setStudents(data.eleves || data.data || []);
@@ -145,9 +145,9 @@ export default function StudentList() {
                 <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      {s.photo ? (
+                      {s.photoURL && s.photoURL !== 'INDEFINI' ? (
                         <img
-                          src={`${PHOTO_BASE}/${s.photo}`}
+                          src={`${PHOTO_BASE}${s.photoURL}`}
                           alt={s.nom}
                           className="w-9 h-9 rounded-full object-cover border border-gray-100"
                         />

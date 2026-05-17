@@ -14,5 +14,7 @@ router.put('/:id', restrictTo('admin'), salaireController.updateFiche); // /fich
 
 router.post('/generer', restrictTo('admin'), salaireController.genererMois);
 router.patch('/:id/payer', restrictTo('admin'), salaireController.payer);
+router.patch('/:id/restaurer', restrictTo('admin'), salaireController.restore);
+router.delete('/:id', restrictTo('admin'), salaireController.remove);
 
 module.exports = router;

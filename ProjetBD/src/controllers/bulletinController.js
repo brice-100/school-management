@@ -10,7 +10,7 @@ const pool = require('../config/db');
  * de l'année scolaire donnée), pas par l'ID brut.
  */
 const getBulletinData = asyncHandler(async (req, res) => {
-  const matricule      = parseInt(req.params.id);
+  const matricule      = req.params.id;
   const trimestreNum   = parseInt(req.query.trimestre) || 1;   // 1, 2 ou 3
   const annee_scolaire = req.query.annee_scolaire || '2024-2025';
 
@@ -182,6 +182,62 @@ const getBulletinData = asyncHandler(async (req, res) => {
     }
   }
 
+  // 6. Calcul dynamique Conduite (depuis table rapport) & Travail
+  const [anneeRows] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE libelle = ?', [annee_scolaire]);
+  const idAnnee = anneeRows[0] ? anneeRows[0].idAnnee : null;
+
+  let absencesTotales = 0;
+  let absencesNJ = 0;
+  let exclusions = 0;
+  let hasAvertissementConduite = false;
+  let hasBlameConduite = false;
+
+  if (idAnnee) {
+    const [reports] = await pool.query(`
+      SELECT r.*,
+        (SELECT COUNT(*) FROM justificatifs j WHERE j.idRapport = r.idRap AND j.idDirecteur IS NOT NULL) > 0 AS justifie
+      FROM rapport r
+      WHERE r.matricule = ? AND r.idAca = ?
+    `, [matricule, idAnnee]);
+
+    const trimesterReports = reports.filter(r => {
+      if (!r.event_date) return false;
+      const date = new Date(r.event_date);
+      const month = date.getMonth() + 1; // 1-12
+
+      if (trimestreNum === 1) {
+        return month >= 9 && month <= 12;
+      } else if (trimestreNum === 2) {
+        return month >= 1 && month <= 3;
+      } else {
+        return month >= 4 && month <= 8;
+      }
+    });
+
+    trimesterReports.forEach(r => {
+      const lib = r.libelle.toLowerCase();
+      if (lib.includes('absence') || lib.includes('absent')) {
+        const hoursMatch = lib.match(/(\d+)\s*h/);
+        const hours = hoursMatch ? parseInt(hoursMatch[1]) : 2;
+        absencesTotales += hours;
+        if (!r.justifie) {
+          absencesNJ += hours;
+        }
+      }
+      if (lib.includes('exclusion') || lib.includes('exclu')) {
+        const daysMatch = lib.match(/(\d+)\s*(j|jour)/);
+        const days = daysMatch ? parseInt(daysMatch[1]) : 1;
+        exclusions += days;
+      }
+      if (lib.includes('avertissement') || lib.includes('conduite') || r.points >= 5) {
+        hasAvertissementConduite = true;
+      }
+      if (lib.includes('blâme') || lib.includes('blame') || r.points >= 10) {
+        hasBlameConduite = true;
+      }
+    });
+  }
+
   return res.status(200).json({
     data: {
       trimestre: trimestreNum,
@@ -194,7 +250,21 @@ const getBulletinData = asyncHandler(async (req, res) => {
       mention: getMention(moyenneGen),
       admis: moyenneGen >= 10,
       notes: groupedNotes,
-      stats: classStats
+      stats: classStats,
+      travail: {
+        tableauHonneur: (moyenneGen >= 12 && !hasBlameConduite) ? 'Oui' : 'Non',
+        encouragement: (moyenneGen >= 14 && !hasBlameConduite) ? 'Oui' : 'Non',
+        felicitation: (moyenneGen >= 16 && !hasBlameConduite) ? 'Oui' : 'Non',
+        avertissement: moyenneGen < 9 ? 'Oui' : 'Non',
+        blame: moyenneGen < 7 ? 'Oui' : 'Non'
+      },
+      conduite: {
+        absencesTotales: absencesTotales + ' H',
+        absencesNJ: absencesNJ + ' H',
+        exclusions: exclusions + ' Jrs',
+        avertissement: hasAvertissementConduite ? 'Oui' : 'Non',
+        blame: hasBlameConduite ? 'Oui' : 'Non'
+      }
     }
   });
 });

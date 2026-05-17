@@ -55,12 +55,20 @@ router.get('/classe/:idClasse',
 );
 
 /**
+ * GET /api/eleves/par-cours?idCours=1
+ */
+router.get('/par-cours',
+  allowAny({ admins: [0, 1, 2, 3], personnes: [1, 2, 3] }),
+  eleveController.getByCours
+);
+
+/**
  * GET /api/eleves/:matricule
  * Détail d'un élève
  */
 router.get('/:matricule',
   allowAny({ admins: [0, 1, 2, 3], personnes: [1, 2, 3, 4] }),
-  [param('matricule').isInt({ min: 1 }).withMessage('Matricule invalide')],
+  [param('matricule').notEmpty().withMessage('Matricule requis')],
   validate,
   eleveController.getOne
 );
@@ -71,7 +79,7 @@ router.get('/:matricule',
  */
 router.get('/:matricule/fiche',
   allowAny({ admins: [0, 1, 2, 3] }),
-  [param('matricule').isInt({ min: 1 }).withMessage('Matricule invalide')],
+  [param('matricule').notEmpty().withMessage('Matricule requis')],
   validate,
   eleveController.getFiche
 );
@@ -96,7 +104,7 @@ router.put('/:matricule',
   allowAny({ admins: [0, 1, 3], personnes: [3] }),
   handleUpload(uploadPhoto),
   [
-    param('matricule').isInt({ min: 1 }).withMessage('Matricule invalide'),
+    param('matricule').notEmpty().withMessage('Matricule requis'),
     ...eleveValidation,
   ],
   validate,
@@ -110,7 +118,7 @@ router.put('/:matricule',
 router.patch('/:matricule/statut',
   allowAny({ admins: [0, 1, 3], personnes: [3] }),
   [
-    param('matricule').isInt({ min: 1 }).withMessage('Matricule invalide'),
+    param('matricule').notEmpty().withMessage('Matricule requis'),
     body('actif').isIn([0, 1]).withMessage('actif doit être 0 ou 1'),
   ],
   validate,
@@ -123,9 +131,31 @@ router.patch('/:matricule/statut',
  */
 router.delete('/:matricule',
   allowAdmin(0, 1),
-  [param('matricule').isInt({ min: 1 }).withMessage('Matricule invalide')],
+  [param('matricule').notEmpty().withMessage('Matricule requis')],
   validate,
   eleveController.remove
+);
+
+/**
+ * DELETE /api/eleves/:matricule/hard
+ * Suppression définitive — réservé root et admin uniquement
+ */
+router.delete('/:matricule/hard',
+  allowAdmin(0, 1),
+  [param('matricule').notEmpty().withMessage('Matricule requis')],
+  validate,
+  eleveController.hardRemove
+);
+
+/**
+ * PATCH /api/eleves/:matricule/restaurer
+ * Restaure un élève archivé — réservé admin
+ */
+router.patch('/:matricule/restaurer',
+  allowAdmin(0, 1),
+  [param('matricule').notEmpty().withMessage('Matricule requis')],
+  validate,
+  eleveController.restore
 );
 
 module.exports = router;

@@ -10,6 +10,8 @@ const getAll = asyncHandler(async (req, res) => {
   const filters = {};
   if (req.query.actif !== undefined) filters.actif = parseInt(req.query.actif);
   if (req.query.search) filters.search = req.query.search;
+  if (req.query.archives === '1') filters.isDeleted = 1;
+  else filters.isDeleted = 0;
 
   const enseignants = await enseignantModel.findAll(filters);
   return res.status(200).json({ total: enseignants.length, data: enseignants });
@@ -113,7 +115,7 @@ const update = asyncHandler(async (req, res) => {
 
   // Mettre à jour le cours si fourni
   if (req.body.idCours) {
-    await enseignantModel.updateCours(idEnseignant, req.body.idCours);
+    await enseignantModel.updateCours(existing.idPers, req.body.idCours, req.user.id);
   }
 
   // Mettre à jour la classe (Titulaire)
@@ -192,7 +194,24 @@ const remove = asyncHandler(async (req, res) => {
   }
 
   await enseignantModel.remove(idEnseignant, existing.idPers);
-  return res.status(200).json({ message: 'Enseignant supprimé définitivement', idEnseignant });
+  return res.status(200).json({ message: 'Enseignant supprimé logiquement', idEnseignant });
+});
+
+/**
+ * PATCH /api/enseignants/:idEnseignant/restaurer
+ * Restaure un enseignant archivé
+ */
+const restore = asyncHandler(async (req, res) => {
+  const idEnseignant = parseInt(req.params.idEnseignant);
+  const existing = await enseignantModel.findById(idEnseignant); // This returns null if isDeleted=1 ? No, we need to check findById. Wait, findById has isDeleted=0.
+  // Actually, restore only needs idPers which we can get with a raw query or we just pass idPers if we have it.
+  // Let's get idPers directly.
+  const pool = require('../config/db');
+  const [ens] = await pool.query('SELECT idPers FROM Enseignant WHERE idEnseignant = ?', [idEnseignant]);
+  if (!ens[0]) return res.status(404).json({ message: 'Enseignant introuvable' });
+  
+  await enseignantModel.restore(ens[0].idPers);
+  return res.status(200).json({ message: 'Enseignant restauré avec succès', idEnseignant });
 });
 
 /**
@@ -209,9 +228,9 @@ const getElevesEnseignant = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Enseignant introuvable' });
   }
 
-  // Trouver les classes associées :
-  // 1. Via la table Titulaire (classe titulaire)
-  // 2. Via Cours → idClasse (cours enseigné)
+  const currentAnnee = parseInt(req.idAnnee) || null;
+
+  // Trouver les classes associées
   const [rows] = await pool.query(`
     SELECT DISTINCT
       e.matricule,
@@ -220,40 +239,45 @@ const getElevesEnseignant = asyncHandler(async (req, res) => {
       e.sexe,
       e.photoURL AS photo,
       e.actif,
+      s.idSalle,
       cl.idClasse,
-      cl.libelle AS classe_nom,
+      cl.libelle AS cl_libelle,
+      s.libelle AS s_libelle,
+      CONCAT(cl.libelle, ' - ', s.libelle) AS classe_nom,
       e.dateNaissance
     FROM Eleve e
     JOIN Frequente f ON f.matricule = e.matricule
     JOIN Salle s ON s.idSalle = f.idSalle
     JOIN Classe cl ON cl.idClasse = s.idClasse
-    WHERE cl.idClasse IN (
-      -- Classes via le cours enseigné
+    WHERE (s.idClasse IN (
+      -- Salles via le cours enseigné
       SELECT c.idClasse FROM Cours c
       JOIN Enseignant ens ON ens.idCours = c.idCours
       WHERE ens.idPers = ?
-      UNION
-      -- Classes via Titulaire
-      SELECT sa.idClasse FROM Titulaire ti
+    ) OR s.idSalle IN (
+      -- Salles via Titulaire
+      SELECT sa.idSalle FROM Titulaire ti
       JOIN Salle sa ON sa.idSalle = ti.idSalle
       WHERE ti.idPers = ?
-    )
-    AND e.actif = 1
-    ORDER BY cl.libelle ASC, e.nom ASC, e.prenom ASC
-  `, [enseignant.idPers, enseignant.idPers]);
+    ))
+    AND e.actif = 1 AND e.isDeleted = 0
+    AND (f.idAcademi = ? OR ? IS NULL)
+    ORDER BY cl_libelle ASC, s_libelle ASC, e.nom ASC, e.prenom ASC
+  `, [enseignant.idPers, enseignant.idPers, currentAnnee, currentAnnee]);
 
 
-  // Grouper par classe
+  // Grouper par salle
   const classeMap = {};
   for (const row of rows) {
-    if (!classeMap[row.idClasse]) {
-      classeMap[row.idClasse] = {
+    if (!classeMap[row.idSalle]) {
+      classeMap[row.idSalle] = {
         idClasse: row.idClasse,
+        idSalle: row.idSalle,
         classe_nom: row.classe_nom,
         eleves: []
       };
     }
-    classeMap[row.idClasse].eleves.push({
+    classeMap[row.idSalle].eleves.push({
       matricule: row.matricule,
       nom: row.nom,
       prenom: row.prenom,
@@ -270,4 +294,5 @@ const getElevesEnseignant = asyncHandler(async (req, res) => {
   return res.status(200).json({ total: total_eleves, classes, data: rows });
 });
 
-module.exports = { getAll, getOne, create, update, updateStatut, updatePassword, remove, getElevesEnseignant };
+
+module.exports = { getAll, getOne, create, update, updateStatut, updatePassword, remove, restore, getElevesEnseignant };

@@ -2,7 +2,10 @@ const asyncHandler = require('../utils/asyncHandler');
 const messageModel = require('../models/messageModel');
 
 const getAll = asyncHandler(async (req, res) => {
-  const messages = await messageModel.findAll(req.query);
+  const filters = { ...req.query };
+  if (req.query.archives === '1') filters.isDeleted = 1;
+  else filters.isDeleted = 0;
+  const messages = await messageModel.findAll(filters);
   return res.status(200).json({ total: messages.length, data: messages });
 });
 
@@ -28,7 +31,12 @@ const update = asyncHandler(async (req, res) => {
 
 const remove = asyncHandler(async (req, res) => {
   await messageModel.remove(parseInt(req.params.id));
-  return res.status(200).json({ message: 'Message supprimé' });
+  return res.status(200).json({ message: 'Message supprimé logiquement' });
 });
 
-module.exports = { getAll, getOne, create, update, remove };
+const restore = asyncHandler(async (req, res) => {
+  await messageModel.restore(parseInt(req.params.id));
+  return res.status(200).json({ message: 'Message restauré avec succès' });
+});
+
+module.exports = { getAll, getOne, create, update, remove, restore };

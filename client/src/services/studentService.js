@@ -5,9 +5,10 @@ import api from './api'
 // lieuNaissance, sexe, actif, idVilleNaissance
 export const getStudents   = (params)        => api.get('/eleves', { params })
 export const getStudent    = (matricule)     => api.get(`/eleves/${matricule}`)
-export const createStudent = (data)          => api.post('/eleves', data)
-export const updateStudent = (matricule, data) => api.put(`/eleves/${matricule}`, data)
-export const deleteStudent = (matricule)     => api.patch(`/eleves/${matricule}/statut`, { actif: 0 })
-export const restoreStudent = (matricule)    => api.patch(`/eleves/${matricule}/statut`, { actif: 1 })
-export const toggleActif   = (matricule, actif) => api.patch(`/eleves/${matricule}/statut`, { actif })
-export const hardDeleteStudent = (matricule) => api.delete(`/eleves/${matricule}`)
+export const createStudent = (data)          => api.post('/eleves', data, { headers: { 'Content-Type': 'multipart/form-data' } })
+export const updateStudent = (matricule, data) => api.put(`/eleves/${matricule}`, data, { headers: { 'Content-Type': 'multipart/form-data' } })
+export const deleteStudent = (matricule)     => api.delete(`/eleves/${matricule}`)
+export const restoreStudent = (matricule)    => api.patch(`/eleves/${matricule}/restaurer`)
+export const toggleActif    = (matricule, actif) => api.patch(`/eleves/${matricule}/statut`, { actif })
+
+export const hardDeleteStudent = (matricule) => api.delete(`/eleves/${matricule}/hard`) // Note: backend doesn't have this yet, but we'll see if needed. Actually, let's just use delete for now.

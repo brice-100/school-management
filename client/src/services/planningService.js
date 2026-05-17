@@ -7,6 +7,8 @@ export const getMyPlanning         = (params)      => api.get('/planning/mine', 
 export const createPlanning        = (data)        => api.post('/planning', data)
 export const updatePlanning        = (id, data)    => api.put(`/planning/${id}`, data)
 export const deletePlanning        = (id)          => api.delete(`/planning/${id}`)
+export const restorePlanning      = (id)          => api.patch(`/planning/${id}/restaurer`)
+
 
 
 export const getEmploiDuTemps          = (params)   => api.get('/emploi-du-temps', { params })

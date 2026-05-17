@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, Search, GraduationCap, ChevronRight, User, Calendar, Mail, Phone, Filter } from 'lucide-react'
+import { Users, Search, GraduationCap, ChevronRight, User, Calendar, Mail, Phone, Filter, BookOpen } from 'lucide-react'
 import { getTeacherStudents } from '../../services/teacherService'
 import { getClasses } from '../../services/classService'
 import { useAuth } from '../../context/AuthContext'

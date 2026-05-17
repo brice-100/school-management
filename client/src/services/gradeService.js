@@ -9,6 +9,8 @@ export const createGrade       = (data)          => api.post('/grades', data)
 export const updateGrade       = (id, data)      => api.put(`/grades/${id}`, data)
 export const validerGrades     = (ids)           => api.patch('/grades/valider', { ids })
 export const deleteGrade       = (id)            => api.delete(`/grades/${id}`)
+export const restoreGrade      = (id)            => api.patch(`/grades/${id}/restaurer`)
+
 export const getGrade = (params) => api.get('/evaluations', { params })
 export const CreateGrade = (data) => {
   // Mapping ancien → nouveau format backend

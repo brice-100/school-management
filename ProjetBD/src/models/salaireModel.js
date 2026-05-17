@@ -6,9 +6,9 @@ const findAll = async (filters = {}) => {
     FROM salaires s
     JOIN Enseignant e ON s.teacher_id = e.idEnseignant
     JOIN Personne p ON e.idPers = p.idPers
-    WHERE 1=1
+    WHERE s.isDeleted = ?
   `;
-  const params = [];
+  const params = [filters.isDeleted !== undefined ? filters.isDeleted : 0];
 
   if (filters.annee) {
     query += ' AND s.annee = ?';
@@ -21,6 +21,15 @@ const findAll = async (filters = {}) => {
   if (filters.statut) {
     query += ' AND s.statut = ?';
     params.push(filters.statut);
+  }
+  if (filters.idAnnee) {
+    query += ' AND s.idAnnee = ?';
+    params.push(filters.idAnnee);
+  }
+  // CORRIGÉ: Ajout du filtre teacher_id pour empêcher la fuite de données salariales vers d'autres enseignants
+  if (filters.teacher_id) {
+    query += ' AND s.teacher_id = ?';
+    params.push(filters.teacher_id);
   }
 
   query += ' ORDER BY s.created_at DESC';
@@ -40,7 +49,7 @@ const findById = async (id) => {
     FROM salaires s
     JOIN Enseignant e ON s.teacher_id = e.idEnseignant
     JOIN Personne p ON e.idPers = p.idPers
-    WHERE s.id = ?
+    WHERE s.id = ? AND s.isDeleted = 0
   `, [id]);
   if (!rows[0]) return null;
   return {
@@ -52,8 +61,8 @@ const findById = async (id) => {
 
 const create = async (data) => {
   const [result] = await pool.query(
-    'INSERT INTO salaires (teacher_id, montant, mois, annee, statut, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
-    [data.teacher_id, data.montant, data.mois, data.annee, data.statut || 'non_paye']
+    'INSERT INTO salaires (teacher_id, montant, mois, annee, statut, idAnnee, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+    [data.teacher_id, data.montant, data.mois, data.annee, data.statut || 'non_paye', data.idAnnee || 1]
   );
   return result.insertId;
 };
@@ -81,7 +90,12 @@ const update = async (id, data) => {
 };
 
 const remove = async (id) => {
-  const [result] = await pool.query('DELETE FROM salaires WHERE id = ?', [id]);
+  const [result] = await pool.query('UPDATE salaires SET isDeleted = 1 WHERE id = ?', [id]);
+  return result.affectedRows;
+};
+
+const restore = async (id) => {
+  const [result] = await pool.query('UPDATE salaires SET isDeleted = 0 WHERE id = ?', [id]);
   return result.affectedRows;
 };
 
@@ -93,9 +107,10 @@ const getRecap = async (filters = {}) => {
       SUM(CASE WHEN statut = 'paye' THEN montant ELSE 0 END) as total_paye,
       SUM(CASE WHEN statut = 'non_paye' THEN montant ELSE 0 END) as total_restant
     FROM salaires
-    WHERE 1=1
+    WHERE isDeleted = 0
   `;
   const params = [];
+  if (filters.idAnnee) { query += ' AND idAnnee = ?'; params.push(filters.idAnnee); }
   if (filters.annee) { query += ' AND annee = ?'; params.push(filters.annee); }
   if (filters.mois) { query += ' AND mois = ?'; params.push(filters.mois); }
 
@@ -103,4 +118,4 @@ const getRecap = async (filters = {}) => {
   return rows[0];
 };
 
-module.exports = { findAll, findById, create, update, remove, getRecap };
+module.exports = { findAll, findById, create, update, remove, restore, getRecap };

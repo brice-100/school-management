@@ -189,7 +189,7 @@ export default function TeacherMessaging() {
                       <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
                         <span className="bg-gray-100 px-2 py-0.5 rounded-full uppercase font-bold tracking-wider">{msg.type_sujet}</span>
                         <span>•</span>
-                        <span>{new Date(msg.created_at).toLocaleDateString()} à {new Date(msg.created_at).toLocaleTimeString([], { hour: '2h', minute: '2h' })}</span>
+                        <span>{new Date(msg.created_at).toLocaleDateString()} à {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </div>
                   </div>

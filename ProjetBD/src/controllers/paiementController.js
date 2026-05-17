@@ -6,7 +6,10 @@ const paiementModel = require('../models/paiementModel');
  * Admin : tous les paiements avec filtres (valide, idAca, matricule)
  */
 const getAll = asyncHandler(async (req, res) => {
-  const paiements = await paiementModel.findAll(req.query);
+  const filters = { ...req.query };
+  if (req.query.archives === '1') filters.isDeleted = 1;
+  else filters.isDeleted = 0;
+  const paiements = await paiementModel.findAll(filters);
   return res.status(200).json({ total: paiements.length, data: paiements });
 });
 
@@ -132,9 +135,18 @@ const valider = asyncHandler(async (req, res) => {
  */
 const getSummary = asyncHandler(async (req, res) => {
   const idPers = req.user.id;
-  const idAca = req.query.idAca ? parseInt(req.query.idAca) : null;
-  const summary = await paiementModel.getSummaryByParent(idPers, idAca);
+  const summary = await paiementModel.getSummaryByParent(idPers, req.query);
   return res.status(200).json({ data: summary });
 });
 
-module.exports = { getAll, getRecents, getParentPaiements, getSummary, getOne, create, initier, valider };
+const remove = asyncHandler(async (req, res) => {
+  await paiementModel.remove(parseInt(req.params.id));
+  return res.status(200).json({ message: 'Paiement supprimé logiquement' });
+});
+
+const restore = asyncHandler(async (req, res) => {
+  await paiementModel.restore(parseInt(req.params.id));
+  return res.status(200).json({ message: 'Paiement restauré avec succès' });
+});
+
+module.exports = { getAll, getRecents, getParentPaiements, getSummary, getOne, create, initier, valider, remove, restore };

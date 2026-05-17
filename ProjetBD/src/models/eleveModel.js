@@ -18,9 +18,9 @@ const findAll = async (filters = {}) => {
     LEFT JOIN Frequente f ON e.matricule = f.matricule ${filters.idAnnee ? 'AND f.idAcademi = ?' : ''}
     LEFT JOIN Salle s ON f.idSalle = s.idSalle
     LEFT JOIN Classe c ON s.idClasse = c.idClasse
-    WHERE 1=1
+    WHERE e.isDeleted = ?
   `;
-  const params = [];
+  const params = [filters.isDeleted !== undefined ? filters.isDeleted : 0];
 
   if (filters.classe_id !== undefined) {
     query += ' AND s.idClasse = ?';
@@ -53,7 +53,7 @@ const findByMatricule = async (matricule, idAnnee = null) => {
      LEFT JOIN Parents p ON p.matricule = e.matricule
      LEFT JOIN Frequente f ON (f.matricule = e.matricule ${idAnnee ? 'AND f.idAcademi = ?' : ''})
      LEFT JOIN Salle s ON s.idSalle = f.idSalle
-     WHERE e.matricule = ? LIMIT 1`;
+     WHERE e.matricule = ? AND e.isDeleted = 0 LIMIT 1`;
      
   const params = idAnnee ? [idAnnee, matricule] : [matricule];
   
@@ -73,7 +73,7 @@ const findByClasse = async (idClasse, idAnnee) => {
      JOIN Frequente f ON e.matricule = f.matricule
      JOIN Salle s     ON f.idSalle   = s.idSalle
      LEFT JOIN VilleNaissance v ON e.idVilleNaissance = v.idVille
-     WHERE s.idClasse = ? AND f.idAcademi = ?
+     WHERE s.idClasse = ? AND f.idAcademi = ? AND e.isDeleted = 0
      ORDER BY e.nom ASC, e.prenom ASC`,
     [idClasse, idAnnee]
   );
@@ -81,13 +81,27 @@ const findByClasse = async (idClasse, idAnnee) => {
 };
 
 const create = async (data) => {
-  const {
-    nom, prenom, dateNaissance, lieuNaissance,
-    sexe, langue, photoURL, actif,
-    idVilleNaissance, idAdmin,
+  let {
+    matricule, nom, prenom, dateNaissance, lieuNaissance,
+    sexe, langue, photoURL, actif, idVilleNaissance, idAdmin
   } = data;
 
+  // Génération automatique du matricule si absent
+  if (!matricule) {
+    const year = new Date().getFullYear();
+    const [last] = await pool.query('SELECT matricule FROM Eleve WHERE matricule LIKE ? ORDER BY created_at DESC LIMIT 1', [`AL-${year}-%`]);
+    let nextNum = 1;
+    if (last.length > 0) {
+      const lastMat = last[0].matricule;
+      const parts = lastMat.split('-');
+      const lastNum = parseInt(parts[parts.length - 1]);
+      if (!isNaN(lastNum)) nextNum = lastNum + 1;
+    }
+    matricule = `AL-${year}-${nextNum.toString().padStart(4, '0')}`;
+  }
+
   let finalVilleId = idVilleNaissance;
+
   if (!finalVilleId) {
     const [villes] = await pool.query('SELECT idVille FROM VilleNaissance LIMIT 1');
     if (villes.length > 0) {
@@ -98,20 +112,31 @@ const create = async (data) => {
     }
   }
 
-  const [result] = await pool.query(
-    `INSERT INTO Eleve
-       (nom, prenom, dateNaissance, lieuNaissance, sexe, langue, photoURL, actif, idVilleNaissance, idAdmin, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-    [
-      nom, prenom, 
-      dateNaissance || '2000-01-01', 
-      lieuNaissance || 'INCONNU', 
-      sexe ?? 0,
-      langue || 'NON DEFINI', photoURL || 'INDEFINI', actif ?? 1,
-      finalVilleId, idAdmin
-    ]
-  );
-  return result.insertId;
+  const fs = require('fs');
+  const logMsg = `[${new Date().toISOString()}] --- INSERT Eleve ---\nMatricule: ${matricule}\nData: ${JSON.stringify({ nom, prenom, dateNaissance, lieuNaissance, sexe, langue, photoURL, actif, finalVilleId, idAdmin })}\n`;
+  fs.appendFileSync('debug_insert.log', logMsg);
+
+  let result;
+  try {
+    [result] = await pool.query(
+      `INSERT INTO Eleve
+         (matricule, nom, prenom, dateNaissance, lieuNaissance, sexe, langue, photoURL, actif, idVilleNaissance, idAdmin, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        matricule, nom, prenom, 
+        dateNaissance || '2000-01-01', 
+        lieuNaissance || 'INCONNU', 
+        sexe ?? 0,
+        langue || 'NON DEFINI', photoURL || 'INDEFINI', actif ?? 1,
+        finalVilleId, idAdmin
+      ]
+    );
+  } catch (err) {
+    fs.appendFileSync('debug_insert.log', `ERROR: ${err.message}\n${err.stack}\n`);
+    throw err;
+  }
+
+  return matricule || result.insertId;
 };
 
 /**
@@ -137,11 +162,20 @@ const update = async (matricule, data) => {
 
   if (fields.length === 0) return 0;
 
+  let result;
   params.push(matricule);
-  const [result] = await pool.query(
-    `UPDATE Eleve SET ${fields.join(', ')} WHERE matricule = ?`,
-    params
-  );
+  try {
+    const fs = require('fs');
+    fs.appendFileSync('debug_update.log', `[${new Date().toISOString()}] UPDATE Eleve matricule=${matricule} data=${JSON.stringify(data)}\n`);
+    [result] = await pool.query(
+      `UPDATE Eleve SET ${fields.join(', ')} WHERE matricule = ?`,
+      params
+    );
+  } catch (err) {
+    const fs = require('fs');
+    fs.appendFileSync('debug_update.log', `ERROR: ${err.message}\n${err.stack}\n`);
+    throw err;
+  }
   return result.affectedRows;
 };
 
@@ -159,27 +193,56 @@ const setActif = async (matricule, actif) => {
 };
 
 /**
- * Supprime toutes les données liées à un élève (dans le bon ordre FK).
+ * Restaure un élève.
  * @param {number} matricule
  */
-const removeRelated = async (matricule) => {
-  await pool.query('DELETE FROM Evaluation WHERE matricule = ?', [matricule]);
-  await pool.query('DELETE FROM Rapport    WHERE matricule = ?', [matricule]);
-  await pool.query('DELETE FROM Paiement   WHERE matricule = ?', [matricule]);
-  await pool.query('DELETE FROM Frequente  WHERE matricule = ?', [matricule]);
-  await pool.query('DELETE FROM Parents    WHERE matricule = ?', [matricule]);
-};
-
-/**
- * Supprime définitivement un élève (à utiliser avec précaution).
- * @param {number} matricule
- */
-const remove = async (matricule) => {
+const restore = async (matricule) => {
   const [result] = await pool.query(
-    'DELETE FROM Eleve WHERE matricule = ?',
+    'UPDATE Eleve SET isDeleted = 0 WHERE matricule = ?',
     [matricule]
   );
   return result.affectedRows;
 };
 
-module.exports = { findAll, findByMatricule, findByClasse, create, update, setActif, removeRelated, remove };
+/**
+ * Supprime logiquement un élève (soft delete).
+ * @param {number} matricule
+ */
+const remove = async (matricule) => {
+  const [result] = await pool.query(
+    'UPDATE Eleve SET isDeleted = 1 WHERE matricule = ?',
+    [matricule]
+  );
+  return result.affectedRows;
+};
+
+/**
+ * Suppression définitive d'un élève et de toutes ses données liées.
+ * @param {string} matricule
+ */
+const hardRemove = async (matricule) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    
+    // Supprimer les données liées dans l'ordre pour respecter les FK
+    await conn.query('DELETE FROM Parents WHERE matricule = ?', [matricule]);
+    await conn.query('DELETE FROM Frequente WHERE matricule = ?', [matricule]);
+    await conn.query('DELETE FROM Evaluation WHERE matricule = ?', [matricule]);
+    await conn.query('DELETE FROM Paiement WHERE matricule = ?', [matricule]);
+    await conn.query('DELETE FROM messageinterne WHERE matricule_eleve = ?', [matricule]);
+    await conn.query('DELETE FROM Rapport WHERE matricule = ?', [matricule]);
+    
+    const [result] = await conn.query('DELETE FROM Eleve WHERE matricule = ?', [matricule]);
+    
+    await conn.commit();
+    return result.affectedRows;
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+};
+
+module.exports = { findAll, findByMatricule, findByClasse, create, update, setActif, remove, restore, hardRemove };

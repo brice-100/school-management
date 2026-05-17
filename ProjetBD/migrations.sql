@@ -48,6 +48,18 @@ UPDATE AnneeAcademique SET est_active = 1
 WHERE idAnnee = (SELECT MAX(idAnnee) FROM (SELECT idAnnee FROM AnneeAcademique) AS sub)
   AND NOT EXISTS (SELECT 1 FROM (SELECT COUNT(*) as cnt FROM AnneeAcademique WHERE est_active = 1) AS chk WHERE cnt > 0);
 
+-- 12. Conversion Matricule INT -> VARCHAR(50) (Alphanumérique)
+SET FOREIGN_KEY_CHECKS = 0;
+
+ALTER TABLE Eleve MODIFY matricule VARCHAR(50) NOT NULL;
+ALTER TABLE Evaluation MODIFY matricule VARCHAR(50) NOT NULL;
+ALTER TABLE Frequente MODIFY matricule VARCHAR(50) NOT NULL;
+ALTER TABLE Paiement MODIFY matricule VARCHAR(50) NOT NULL;
+ALTER TABLE Parents MODIFY matricule VARCHAR(50) NOT NULL;
+ALTER TABLE Rapport MODIFY matricule VARCHAR(50) NOT NULL;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
 -- Vérification finale
 SELECT 'Migrations terminées avec succès' AS statut;
 SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT

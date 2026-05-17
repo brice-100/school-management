@@ -11,7 +11,7 @@ const findById = async (idAnnee) => {
 };
 
 const getActive = async () => {
-  const [rows] = await pool.query('SELECT * FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
+  const [rows] = await pool.query('SELECT * FROM AnneeAcademique WHERE statut = 1 LIMIT 1');
   // Fallback if no active year is set yet
   if (rows.length === 0) {
     const [fallback] = await pool.query('SELECT * FROM AnneeAcademique ORDER BY idAnnee DESC LIMIT 1');
@@ -24,8 +24,8 @@ const setActive = async (idAnnee) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    await conn.query('UPDATE AnneeAcademique SET est_active = 0');
-    const [result] = await conn.query('UPDATE AnneeAcademique SET est_active = 1 WHERE idAnnee = ?', [idAnnee]);
+    await conn.query('UPDATE AnneeAcademique SET statut = 0');
+    const [result] = await conn.query('UPDATE AnneeAcademique SET statut = 1 WHERE idAnnee = ?', [idAnnee]);
     await conn.commit();
     return result.affectedRows;
   } catch (err) {

@@ -19,8 +19,8 @@ import {
   getTranches,
 } from '../../services/paymentService'
 import { getStudents, toggleActif } from '../../services/studentService'
+import { getMesEnfants } from '../../services/parentService'
 
-import { filterDeleted } from '../../services/deleteConfig'
 import { useAuth } from '../../context/AuthContext'
 import { useYear } from '../../context/YearContext'
 import toast from 'react-hot-toast'
@@ -121,7 +121,7 @@ function NouveauPaiementForm({ modes, annees, onSuccess, onCancel }) {
   })
 
   useEffect(() => {
-    getStudents({}).then(({ data }) => setStudents(filterDeleted(data.data || [])))
+    getStudents({ archives: 0 }).then(({ data }) => setStudents(data.data || []))
     getTranches().then(({ data }) => setTranches(data.data || []))
   }, [])
 
@@ -232,7 +232,7 @@ function InitierPaiementForm({ modes, annees, onSuccess, onCancel }) {
   })
 
   useEffect(() => {
-    getStudents({}).then(({ data }) => setStudents(filterDeleted(data.data || [])))
+    getMesEnfants().then(({ data }) => setStudents(data.data || []))
     getTranches().then(({ data }) => setTranches(data.data || []))
   }, [])
 
@@ -437,7 +437,7 @@ export default function PaymentPage() {
           getPaiements({ ...filters }),
           getPaiementsRecents({ limit: 5 }),
         ])
-        setPaiements(filterDeleted(list.data.paiements || list.data.data || []))
+        setPaiements(list.data.paiements || list.data.data || [])
         setRecents(rec.data.paiements || rec.data.data || [])
       }
     } catch { toast.error('Erreur chargement paiements.') }

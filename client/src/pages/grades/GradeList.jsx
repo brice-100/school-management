@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Check, CheckSquare, Trash2 } from 'lucide-react'
 import {
   getGrades, createGrade, validerGrades,
-  deleteGrade, getGradeFormData,
+  deleteGrade, restoreGrade, getGradeFormData,
 } from '../../services/gradeService'
 import { getClasses }  from '../../services/classService'
 import { getMatieres } from '../../services/matiereService'
@@ -31,6 +31,7 @@ export default function GradeList() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formLoading, setFormLoading] = useState(false)
+  const [showArchives, setShowArchives] = useState(false)
 
   const [filters, setFilters] = useState({
     classe_id: '', matiere_id: '', trimestre: '1',
@@ -83,9 +84,13 @@ export default function GradeList() {
     if (!selectedYear?.libelle) return
     setLoading(true)
     try {
-      const params = { ...filters, annee_scolaire: selectedYear.libelle }
+      const params = { 
+        ...filters, 
+        annee_scolaire: selectedYear.libelle,
+        archives: showArchives ? 1 : 0
+      }
       const { data } = await getGrades(params)
-      setGrades(filterDeleted(data.data || []))
+      setGrades(data.data || [])
     } catch (err) {
       console.error('[Grades ERROR]', err)
       toast.error('Erreur chargement notes.')
@@ -94,7 +99,7 @@ export default function GradeList() {
     }
   }
 
-  useEffect(() => { fetchGrades() }, [filters])
+  useEffect(() => { fetchGrades() }, [filters, showArchives])
 
   // ── Saisir une note ────────────────────────────────────────────
   const handleCreate = async (e) => {
@@ -108,7 +113,7 @@ export default function GradeList() {
 
     try {
       const payload = {
-        student_id:    parseInt(form.student_id, 10),
+        student_id:    form.student_id,
         matiere_id:    parseInt(form.matiere_id, 10),
         valeur:        v,
         trimestre:     parseInt(form.trimestre, 10),
@@ -163,12 +168,21 @@ export default function GradeList() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Supprimer cette note ?')) return
+    if (!window.confirm('Archiver cette note ?')) return
     try {
       await deleteGrade(id)
-      toast.success('Note supprimée.')
+      toast.success('Note archivée.')
       fetchGrades()
-    } catch { toast.error('Erreur suppression.') }
+    } catch { toast.error('Erreur archivage.') }
+  }
+
+  const handleRestore = async (id) => {
+    if (!window.confirm('Restaurer cette note ?')) return
+    try {
+      await restoreGrade(id)
+      toast.success('Note restaurée.')
+      fetchGrades()
+    } catch { toast.error('Erreur restauration.') }
   }
 
   const toggleSelect = (id) =>
@@ -209,6 +223,9 @@ export default function GradeList() {
               <Plus size={16} /> Saisir une note
             </button>
           )}
+          <button onClick={() => setShowArchives(!showArchives)} className="btn-secondary">
+            {showArchives ? 'Notes Actives' : 'Archives'}
+          </button>
         </div>
       </div>
 
@@ -289,7 +306,7 @@ export default function GradeList() {
                   >
                     <option value="">— Choisir —</option>
                     {students.map(s => (
-                      <option key={s.matricule} value={String(s.matricule)}>
+                      <option key={s.matricule || s.id} value={String(s.matricule || s.id)}>
                         {s.prenom} {s.nom}
                         {s.classe_nom ? ` (${s.classe_nom})` : ''}
                       </option>
@@ -308,7 +325,8 @@ export default function GradeList() {
                   >
                     <option value="">— Choisir —</option>
                     {matieres.map(m => (
-                      <option key={m.idCours} value={String(m.idCours)}>{m.libelle}</option>
+                      // CORRIGÉ: Utiliser idCours ou id (et libelle ou nom) pour correspondre au format aliasé du backend
+                      <option key={m.idCours || m.id} value={String(m.idCours || m.id)}>{m.libelle || m.nom}</option>
                     ))}
                   </select>
                 </div>
@@ -481,18 +499,27 @@ export default function GradeList() {
                   {isTeacher && (
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        {g.statut === 'brouillon' && (
-                          <button onClick={() => handleEdit(g)}
-                            className="btn-icon text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600"
-                            title="Modifier">
-                            <Plus size={14} className="rotate-45" /> {/* Simulant un crayon */}
+                        {showArchives ? (
+                          <button onClick={() => handleRestore(g.id)}
+                            className="btn-secondary text-xs py-1 px-3">
+                            Restaurer
                           </button>
+                        ) : (
+                          <>
+                            {g.statut === 'brouillon' && (
+                              <button onClick={() => handleEdit(g)}
+                                className="btn-icon text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600"
+                                title="Modifier">
+                                <Plus size={14} className="rotate-45" />
+                              </button>
+                            )}
+                            <button onClick={() => handleDelete(g.id)}
+                              className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
+                              title="Archiver">
+                              <Trash2 size={14} />
+                            </button>
+                          </>
                         )}
-                        <button onClick={() => handleDelete(g.id)}
-                          className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
-                          title="Supprimer">
-                          <Trash2 size={14} />
-                        </button>
                       </div>
                     </td>
                   )}

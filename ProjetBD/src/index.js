@@ -21,6 +21,10 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const { injectAnnee } = require('./middleware/anneeMiddleware');
+app.use(injectAnnee);
+
+
 // ─── Fichiers statiques (photos, reçus uploadés) ─────────────
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
@@ -61,7 +65,7 @@ app.use('/api/stats', require('./routes/statsRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/personnes', require('./routes/personneRoutes'));
-
+app.use('/api/specialites', require('./routes/specialiteRoutes'));
 const planningController = require('./controllers/planningController');
 app.get('/api/jours-semaine', planningController.getJoursSemaine);
 

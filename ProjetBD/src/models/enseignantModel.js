@@ -10,7 +10,7 @@ const findAll = async (filters = {}) => {
       p.idPers, p.idPers AS id, p.nom, p.prenom, p.dateNaissance, p.lieuNaissance,
       p.mobile, p.mobile AS telephone, p.phone, p.username, p.username AS email, 
       p.alanyaID, p.created_at, p.actif AS person_actif,
-      e.idEnseignant, COALESCE(e.idEnseignant, p.idPers) AS id, e.idCours, e.Actif AS actif,
+      e.idEnseignant, e.idCours, e.Actif AS actif,
       c.libelle AS matiere_nom,
       COALESCE(
         (SELECT cl.libelle FROM Titulaire ti JOIN Salle sa ON ti.idSalle = sa.idSalle JOIN Classe cl ON sa.idClasse = cl.idClasse WHERE ti.idPers = p.idPers LIMIT 1),
@@ -20,9 +20,9 @@ const findAll = async (filters = {}) => {
     FROM Personne p
     LEFT JOIN Enseignant e ON p.idPers = e.idPers
     LEFT JOIN Cours c ON e.idCours = c.idCours
-    WHERE p.typePersonne = 1
+    WHERE p.typePersonne = 1 AND p.isDeleted = ?
   `;
-  const params = [];
+  const params = [filters.isDeleted !== undefined ? filters.isDeleted : 0];
 
   if (filters.actif !== undefined) {
     query += ' AND COALESCE(e.Actif, p.actif) = ?';
@@ -50,7 +50,7 @@ const findById = async (idEnseignant) => {
     `SELECT
        p.idPers, p.idPers AS id, p.nom, p.prenom, p.dateNaissance, p.lieuNaissance,
        p.mobile, p.mobile AS telephone, p.phone, p.username, p.username AS email, p.alanyaID, p.created_at, p.photo,
-       e.idEnseignant, COALESCE(e.idEnseignant, p.idPers) AS id, e.idCours, e.Actif AS actif,
+       e.idEnseignant, e.idCours, e.Actif AS actif,
        c.libelle AS matiere_nom,
        (SELECT cl.idClasse FROM Titulaire ti JOIN Salle sa ON ti.idSalle = sa.idSalle JOIN Classe cl ON sa.idClasse = cl.idClasse WHERE ti.idPers = p.idPers LIMIT 1) AS classe_id,
        COALESCE(
@@ -60,7 +60,7 @@ const findById = async (idEnseignant) => {
      FROM Personne p
      LEFT JOIN Enseignant e ON p.idPers = e.idPers
      LEFT JOIN Cours c ON e.idCours = c.idCours
-     WHERE (e.idEnseignant = ? OR p.idPers = ?) AND p.typePersonne = 1 LIMIT 1`,
+     WHERE (e.idEnseignant = ? OR p.idPers = ?) AND p.typePersonne = 1 AND p.isDeleted = 0 LIMIT 1`,
     [idEnseignant, idEnseignant]
   );
   return rows[0] || null;
@@ -80,7 +80,7 @@ const findByIdPers = async (idPers) => {
      FROM Personne p
      JOIN Enseignant e ON p.idPers = e.idPers
      LEFT JOIN Cours c ON e.idCours = c.idCours
-     WHERE p.idPers = ? LIMIT 1`,
+     WHERE p.idPers = ? AND p.isDeleted = 0 LIMIT 1`,
     [idPers]
   );
   return rows[0] || null;
@@ -174,17 +174,25 @@ const updatePersonne = async (idPers, data) => {
   return result.affectedRows;
 };
 
-/**
- * Met à jour le cours assigné à un enseignant.
- * @param {number} idEnseignant
- * @param {number} idCours
- */
-const updateCours = async (idEnseignant, idCours) => {
-  const [result] = await pool.query(
-    'UPDATE Enseignant SET idCours = ? WHERE idEnseignant = ?',
-    [idCours, idEnseignant]
-  );
-  return result.affectedRows;
+const updateCours = async (idPers, idCours, idAdmin = 1) => {
+  // Vérifier si une entrée existe déjà dans Enseignant pour cette Personne
+  const [rows] = await pool.query('SELECT idEnseignant FROM Enseignant WHERE idPers = ?', [idPers]);
+  
+  if (rows.length > 0) {
+    // Mise à jour
+    const [result] = await pool.query(
+      'UPDATE Enseignant SET idCours = ? WHERE idPers = ?',
+      [idCours, idPers]
+    );
+    return result.affectedRows;
+  } else {
+    // Création de l'entrée manquante (ex: auto-inscription)
+    const [result] = await pool.query(
+      'INSERT INTO Enseignant (idPers, idCours, Actif, idAdmin, created_at) VALUES (?, ?, 1, ?, NOW())',
+      [idPers, idCours, idAdmin]
+    );
+    return result.insertId;
+  }
 };
 
 /**
@@ -215,7 +223,25 @@ const setActif = async (id, actif) => {
 };
 
 /**
- * Supprime un enseignant et sa Personne associée.
+ * Restaure un enseignant.
+ */
+const restore = async (idPers) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('UPDATE Enseignant SET isDeleted = 0 WHERE idPers = ?', [idPers]);
+    await conn.query('UPDATE Personne SET isDeleted = 0 WHERE idPers = ?', [idPers]);
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
+
+/**
+ * Supprime logiquement un enseignant et sa Personne associée.
  * @param {number} idEnseignant
  * @param {number} idPers
  */
@@ -223,14 +249,12 @@ const remove = async (idEnseignant, idPers) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    // 1. Supprimer les références dans les tables dépendantes
-    await conn.query('DELETE FROM Titulaire WHERE idPers = ?', [idPers]);
     
-    // 2. Supprimer de la table Enseignant
-    await conn.query('DELETE FROM Enseignant WHERE idEnseignant = ?', [idEnseignant]);
+    // 2. Supprimer logiquement de la table Enseignant
+    await conn.query('UPDATE Enseignant SET isDeleted = 1 WHERE idEnseignant = ?', [idEnseignant]);
     
-    // 3. Supprimer de la table Personne
-    await conn.query('DELETE FROM Personne WHERE idPers = ?', [idPers]);
+    // 3. Supprimer logiquement de la table Personne
+    await conn.query('UPDATE Personne SET isDeleted = 1 WHERE idPers = ?', [idPers]);
     
     await conn.commit();
   } catch (err) {
@@ -243,5 +267,5 @@ const remove = async (idEnseignant, idPers) => {
 
 module.exports = {
   findAll, findById, findByIdPers, isUsernameTaken,
-  create, updatePersonne, updateCours, setActif, remove,
+  create, updatePersonne, updateCours, setActif, remove, restore
 };

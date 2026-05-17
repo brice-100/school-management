@@ -13,6 +13,8 @@ const getAll = asyncHandler(async (req, res) => {
   if (req.query.idAdmin !== undefined) filters.idAdmin = parseInt(req.query.idAdmin);
   if (req.query.idAnnee !== undefined) filters.idAnnee = parseInt(req.query.idAnnee);
   if (req.query.classe_id !== undefined) filters.classe_id = parseInt(req.query.classe_id);
+  if (req.query.archives === '1') filters.isDeleted = 1;
+  else filters.isDeleted = 0;
 
   const eleves = await eleveModel.findAll(filters);
   return res.status(200).json({ total: eleves.length, data: eleves });
@@ -24,7 +26,7 @@ const getAll = asyncHandler(async (req, res) => {
  */
 const getOne = asyncHandler(async (req, res) => {
   const idAnnee = req.query.idAnnee ? parseInt(req.query.idAnnee) : null;
-  const eleve = await eleveModel.findByMatricule(parseInt(req.params.matricule), idAnnee);
+  const eleve = await eleveModel.findByMatricule(req.params.matricule, idAnnee);
   if (!eleve) {
     return res.status(404).json({ message: 'Élève introuvable' });
   }
@@ -72,7 +74,7 @@ const create = asyncHandler(async (req, res) => {
       const [res] = await pool.query('INSERT INTO Salle (libelle, surface, idClasse, actif, idAdmin, created_at) VALUES (?, ?, ?, 1, ?, NOW())', ['Salle Unique', 'NON DEFINIE', req.body.classe_id, data.idAdmin]);
       idSalle = res.insertId;
     }
-    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
+    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE statut = 1 LIMIT 1');
     const idAcademi = annees.length > 0 ? annees[0].idAnnee : 1;
     await pool.query('INSERT INTO Frequente (idSalle, idAcademi, matricule, idAdmin, created_at) VALUES (?, ?, ?, ?, NOW())', [idSalle, idAcademi, matricule, data.idAdmin]);
   }
@@ -82,14 +84,15 @@ const create = asyncHandler(async (req, res) => {
 });
 
 const update = asyncHandler(async (req, res) => {
-  const matricule = parseInt(req.params.matricule);
+  const matricule = req.params.matricule;
   const existing = await eleveModel.findByMatricule(matricule);
   if (!existing) return res.status(404).json({ message: 'Élève introuvable' });
 
   const data = { ...req.body };
   if (req.file) {
     if (existing.photoURL && existing.photoURL !== 'INDEFINI') {
-      const oldPath = path.join(__dirname, '..', '..', existing.photoURL);
+      // CORRIGÉ: Retrait du slash initial pour éviter que path.join sur Windows ne crée un chemin absolu à la racine du disque
+      const oldPath = path.join(__dirname, '..', '..', existing.photoURL.replace(/^\//, ''));
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
     data.photoURL = `/uploads/photos/${req.file.filename}`;
@@ -116,7 +119,7 @@ const update = asyncHandler(async (req, res) => {
         const [res] = await pool.query('INSERT INTO Salle (libelle, surface, idClasse, actif, idAdmin, created_at) VALUES (?, ?, ?, 1, ?, NOW())', ['Salle Unique', 'NON DEFINIE', req.body.classe_id, req.user.id]);
         idSalle = res.insertId;
       }
-      const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
+      const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE statut = 1 LIMIT 1');
       const idAcademi = annees.length > 0 ? annees[0].idAnnee : 1;
       await pool.query('INSERT INTO Frequente (idSalle, idAcademi, matricule, idAdmin, created_at) VALUES (?, ?, ?, ?, NOW())', [idSalle, idAcademi, matricule, req.user.id]);
     }
@@ -132,7 +135,7 @@ const update = asyncHandler(async (req, res) => {
  * Body : { actif: 0 | 1 }
  */
 const updateStatut = asyncHandler(async (req, res) => {
-  const matricule = parseInt(req.params.matricule);
+  const matricule = req.params.matricule;
   const actif     = parseInt(req.body.actif);
 
   if (![0, 1].includes(actif)) {
@@ -158,24 +161,35 @@ const updateStatut = asyncHandler(async (req, res) => {
  * Supprime d'abord toutes les données liées avant de supprimer l'élève
  */
 const remove = asyncHandler(async (req, res) => {
-  const matricule = parseInt(req.params.matricule);
+  const matricule = req.params.matricule;
 
   const existing = await eleveModel.findByMatricule(matricule);
   if (!existing) {
     return res.status(404).json({ message: 'Élève introuvable' });
   }
 
-  // Supprimer la photo si elle existe
   if (existing.photoURL && existing.photoURL !== 'INDEFINI') {
-    const photoPath = path.join(__dirname, '..', '..', existing.photoURL);
+    // CORRIGÉ: Retrait du slash initial pour éviter un chemin absolu sur Windows
+    const photoPath = path.join(__dirname, '..', '..', existing.photoURL.replace(/^\//, ''));
     if (fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
   }
 
-  // Supprimer les données liées en premier (FK), puis l'élève
-  await eleveModel.removeRelated(matricule);
+  // Plus de suppression des données liées (FK) car c'est un soft delete
   await eleveModel.remove(matricule);
 
-  return res.status(200).json({ message: 'Élève supprimé définitivement', matricule });
+  return res.status(200).json({ message: 'Élève supprimé logiquement', matricule });
+});
+
+/**
+ * PATCH /api/eleves/:matricule/restaurer
+ * Restaure un élève archivé
+ */
+const restore = asyncHandler(async (req, res) => {
+  const matricule = req.params.matricule;
+  const existing = await eleveModel.findByMatricule(matricule); // findByMatricule a un isDeleted=0, on devrait utiliser une requete raw ou ajuster
+  // En fait restore a juste besoin du matricule
+  await eleveModel.restore(matricule);
+  return res.status(200).json({ message: 'Élève restauré avec succès', matricule });
 });
 
 /**
@@ -183,7 +197,7 @@ const remove = asyncHandler(async (req, res) => {
  * Récupère toutes les infos consolidées de l'élève (Paiements, Notes, Discipline, Classe)
  */
 const getFiche = asyncHandler(async (req, res) => {
-  const matricule = parseInt(req.params.matricule);
+  const matricule = req.params.matricule;
   const pool = require('../config/db');
 
   // 1. Infos personnelles + Classe actuelle
@@ -253,4 +267,35 @@ const getFiche = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { getAll, getOne, getByClasse, create, update, updateStatut, remove, getFiche };
+const getByCours = asyncHandler(async (req, res) => {
+  const idCours = parseInt(req.query.idCours || req.params.id);
+  if (!idCours) return res.status(400).json({ message: 'ID Cours requis' });
+  const pool = require('../config/db');
+  const [eleves] = await pool.query(`
+    SELECT e.matricule, e.nom, e.prenom
+    FROM Eleve e
+    JOIN Frequente f ON e.matricule = f.matricule
+    JOIN Salle s ON f.idSalle = s.idSalle
+    JOIN Cours c ON s.idClasse = c.idClasse
+    WHERE c.idCours = ? AND e.actif = 1 AND e.isDeleted = 0
+    GROUP BY e.matricule
+  `, [idCours]);
+  return res.status(200).json({ total: eleves.length, data: eleves });
+});
+
+/**
+ * DELETE /api/eleves/:matricule/hard
+ * Suppression définitive d'un élève (Admin root/scolarité uniquement)
+ */
+const hardRemove = asyncHandler(async (req, res) => {
+  const matricule = req.params.matricule;
+  
+  const existing = await eleveModel.findByMatricule(matricule);
+  // Note: findByMatricule ne trouve que isDeleted=0 par défaut
+  // Mais ici on veut peut-être supprimer un élève déjà archivé
+  
+  await eleveModel.hardRemove(matricule);
+  return res.status(200).json({ message: 'Élève supprimé définitivement', matricule });
+});
+
+module.exports = { getAll, getOne, getByClasse, getByCours, create, update, updateStatut, remove, restore, getFiche, hardRemove };

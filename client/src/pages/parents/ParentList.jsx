@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Search, Plus, Pencil, Trash2, Users } from 'lucide-react'
-import { getParents, deleteParent, updateParentStatut, hardDeleteParent } from '../../services/parentService'
+import { getParents, deleteParent, restoreParent, hardDeleteParent } from '../../services/parentService'
 import toast from 'react-hot-toast'
 
 export default function ParentList() {
@@ -13,20 +13,17 @@ export default function ParentList() {
   const fetchParents = async () => {
     setLoading(true)
     try {
-      // Pour les parents, on récupère tout et on filtre intelligemment
-      const { data } = await getParents({ search, actif: showArchives ? 0 : undefined })
-      let list = data.parents || data.data || []
-      
-      if (!showArchives) {
-        // Actifs (1) ou En attente (0 et pas encore lié à un élève officiellement)
-        list = list.filter(p => p.actif === 1 || (p.actif === 0 && !p.idParent))
-      } else {
-        // Archives : ceux qui sont explicitement à 0 mais qui ont un compte parent créé
-        list = list.filter(p => p.actif === 0 && p.idParent)
-      }
+      const { data } = await getParents({ 
+        search, 
+        archives: showArchives ? 1 : 0 
+      })
+      const list = data.parents || data.data || []
       setParents(list)
-    } catch { toast.error('Erreur chargement parents.') }
-    finally { setLoading(false) }
+    } catch { 
+      toast.error('Erreur chargement parents.') 
+    } finally { 
+      setLoading(false) 
+    }
   }
 
   useEffect(() => {
@@ -48,7 +45,7 @@ export default function ParentList() {
   const handleRestore = async (id, name) => {
     if (!window.confirm(`Restaurer ${name} ?`)) return
     try {
-      await updateParentStatut(id, 1)
+      await restoreParent(id)
       toast.success('Parent restauré.')
       fetchParents()
     } catch { toast.error('Erreur restauration.') }

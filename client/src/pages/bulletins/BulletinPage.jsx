@@ -4,14 +4,19 @@ import { getBulletinData } from '../../services/bulletinService'
 import { getStudents } from '../../services/studentService'
 import { getClasses } from '../../services/classService'
 import { useYear } from '../../context/YearContext'
+import { useAuth } from '../../context/AuthContext'
+import { getMesEnfants } from '../../services/parentService'
 import toast from 'react-hot-toast'
 
 const TRIMESTRES = [1, 2, 3]
 
 export default function BulletinPage() {
+  const { user } = useAuth()
+  const isParent = user?.role === 'parent'
   const { annees, selectedYear } = useYear()
   const [classes,    setClasses]    = useState([])
   const [students,   setStudents]   = useState([])
+  const [allMyChildren, setAllMyChildren] = useState([])
   const [classeId,   setClasseId]   = useState('')
   const [studentId,  setStudentId]  = useState('')
   const [trimestre,  setTrimestre]  = useState(1)
@@ -31,12 +36,33 @@ export default function BulletinPage() {
   }, [])
 
   useEffect(() => {
-    if (!classeId) return
-    getStudents({ classe_id: classeId })
-      .then(({ data }) => setStudents(data.data || []))
-    setStudentId('')
-    setBulletin(null)
-  }, [classeId])
+    if (isParent) {
+      getMesEnfants()
+        .then(({ data }) => setAllMyChildren(data.data || []))
+        .catch(err => console.error('Erreur chargement enfants:', err))
+    }
+  }, [isParent])
+
+  useEffect(() => {
+    if (!classeId) {
+      setStudents([])
+      return
+    }
+    if (isParent) {
+      const selectedClassLibelle = classes.find(c => String(c.idClasse) === String(classeId))?.libelle
+      const filteredKids = allMyChildren.filter(kid => 
+        selectedClassLibelle && kid.classe === selectedClassLibelle
+      )
+      setStudents(filteredKids)
+      setStudentId('')
+      setBulletin(null)
+    } else {
+      getStudents({ classe_id: classeId })
+        .then(({ data }) => setStudents(data.data || []))
+      setStudentId('')
+      setBulletin(null)
+    }
+  }, [classeId, isParent, allMyChildren, classes])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -311,22 +337,22 @@ export default function BulletinPage() {
             <div className="border-r border-gray-900">
                <div className="bg-slate-200 border-b border-gray-900 p-1 font-black text-center uppercase">Travail de l'élève</div>
                <div className="p-2 space-y-1">
-                 <div className="flex justify-between"><span>Tableau d'Honneur</span> <span>Non</span></div>
-                 <div className="flex justify-between"><span>T.H + Encouragement</span> <span>Non</span></div>
-                 <div className="flex justify-between"><span>T.H + Félicitation</span> <span>Non</span></div>
-                 <div className="flex justify-between"><span>Avertissement Travail</span> <span>Non</span></div>
-                 <div className="flex justify-between"><span>Blame Travail</span> <span>Non</span></div>
+                 <div className="flex justify-between"><span>Tableau d'Honneur</span> <span>{bulletin.travail?.tableauHonneur || 'Non'}</span></div>
+                 <div className="flex justify-between"><span>T.H + Encouragement</span> <span>{bulletin.travail?.encouragement || 'Non'}</span></div>
+                 <div className="flex justify-between"><span>T.H + Félicitation</span> <span>{bulletin.travail?.felicitation || 'Non'}</span></div>
+                 <div className="flex justify-between"><span>Avertissement Travail</span> <span>{bulletin.travail?.avertissement || 'Non'}</span></div>
+                 <div className="flex justify-between"><span>Blame Travail</span> <span>{bulletin.travail?.blame || 'Non'}</span></div>
                </div>
             </div>
             {/* Colonne 4 : Conduite */}
             <div>
                <div className="bg-slate-200 border-b border-gray-900 p-1 font-black text-center uppercase">Conduite de l'élève</div>
                <div className="p-2 space-y-1">
-                 <div className="flex justify-between"><span>Absences Totales</span> <span>0 H</span></div>
-                 <div className="flex justify-between"><span>Absences NJ</span> <span>0 H</span></div>
-                 <div className="flex justify-between"><span>Exclusions</span> <span>0 Jrs</span></div>
-                 <div className="flex justify-between"><span>Aver. Conduite</span> <span>Non</span></div>
-                 <div className="flex justify-between"><span>Blame Conduite</span> <span>Non</span></div>
+                 <div className="flex justify-between"><span>Absences Totales</span> <span>{bulletin.conduite?.absencesTotales || '0 H'}</span></div>
+                 <div className="flex justify-between"><span>Absences NJ</span> <span>{bulletin.conduite?.absencesNJ || '0 H'}</span></div>
+                 <div className="flex justify-between"><span>Exclusions</span> <span>{bulletin.conduite?.exclusions || '0 Jrs'}</span></div>
+                 <div className="flex justify-between"><span>Aver. Conduite</span> <span>{bulletin.conduite?.avertissement || 'Non'}</span></div>
+                 <div className="flex justify-between"><span>Blame Conduite</span> <span>{bulletin.conduite?.blame || 'Non'}</span></div>
                </div>
             </div>
           </div>

@@ -6,7 +6,7 @@ const validate = require('../middleware/validateMiddleware');
 
 const router = express.Router();
 
-router.use(authMiddleware);
+router.use(authMiddleware.protect);
 
 /**
  * GET /api/grades
@@ -18,8 +18,8 @@ router.get('/', asyncHandler(async (req, res) => {
   const filters = {
     idClasse: req.query.classe_id,
     idCours:  req.query.matiere_id,
-    // Note: le frontend envoie 'trimestre' (1, 2, 3), 
-    // le backend attend idSession. On peut faire une recherche si besoin.
+    idAnnee:  req.query.idAnnee,
+    isDeleted: req.query.archives === '1' ? 1 : 0
   };
   const evaluations = await evaluationModel.findAll(filters);
   return res.status(200).json({ data: evaluations });
@@ -30,10 +30,60 @@ router.get('/', asyncHandler(async (req, res) => {
  */
 router.get('/form-data', asyncHandler(async (req, res) => {
   const pool = require('../config/db');
+  const { id, userType, role } = req.user;
+  
+  // Si c'est un enseignant, on filtre les élèves de ses classes et ses propres matières
+  if (userType === 'personne' && role === 1) {
+    const currentAnnee = parseInt(req.idAnnee) || null;
+
+    // 1. Ses matières (depuis Cours via Enseignant — Cours.libelle = nom de la matière)
+    const [matieres] = await pool.query(`
+      SELECT DISTINCT c.idCours as id, c.libelle as nom 
+      FROM Cours c
+      JOIN Enseignant ens ON ens.idCours = c.idCours
+      WHERE ens.idPers = ? AND c.actif = 1
+      AND (c.idAnnee = ? OR ? IS NULL)
+    `, [id, currentAnnee, currentAnnee]);
+
+    // 2. Ses élèves (classes enseignées ou salle dont il est titulaire)
+    const [students] = await pool.query(`
+      SELECT DISTINCT e.matricule as id, e.nom, e.prenom, CONCAT(cl.libelle, ' - ', s.libelle) AS classe_nom
+      FROM Eleve e
+      JOIN Frequente f ON e.matricule = f.matricule
+      JOIN Salle s ON f.idSalle = s.idSalle
+      JOIN Classe cl ON cl.idClasse = s.idClasse
+      WHERE (s.idClasse IN (
+        -- Salles via le cours enseigné
+        SELECT c.idClasse FROM Cours c
+        JOIN Enseignant ens ON ens.idCours = c.idCours
+        WHERE ens.idPers = ?
+      ) OR s.idSalle IN (
+        -- Salles via Titulaire
+        SELECT sa.idSalle FROM Titulaire ti
+        JOIN Salle sa ON sa.idSalle = ti.idSalle
+        WHERE ti.idPers = ?
+      ))
+      AND e.actif = 1 AND e.isDeleted = 0
+      AND (f.idAcademi = ? OR ? IS NULL)
+      ORDER BY e.nom ASC, e.prenom ASC
+    `, [id, id, currentAnnee, currentAnnee]);
+
+    const [epreuves] = await pool.query('SELECT idEpreuve as id, libelle as nom FROM Epreuve');
+    const [sessions] = await pool.query('SELECT idSession as id, libelle as nom FROM Session');
+
+    return res.status(200).json({ data: { students, matieres, epreuves, sessions } });
+  }
+
+  // Admin : tout voir
   const [students] = await pool.query('SELECT matricule as id, nom, prenom FROM Eleve WHERE actif = 1');
-  const [matieres] = await pool.query('SELECT idCours as id, libelle as nom FROM Cours WHERE actif = 1');
+  const [matieres] = await pool.query(`
+    SELECT c.idCours as id, c.libelle as nom 
+    FROM Cours c
+    WHERE c.actif = 1
+  `);
   const [epreuves] = await pool.query('SELECT idEpreuve as id, libelle as nom FROM Epreuve');
   const [sessions] = await pool.query('SELECT idSession as id, libelle as nom FROM Session');
+  
   return res.status(200).json({ data: { students, matieres, epreuves, sessions } });
 }));
 
@@ -78,7 +128,12 @@ router.patch('/valider', asyncHandler(async (req, res) => {
 
 router.delete('/:id', asyncHandler(async (req, res) => {
   await evaluationModel.remove(parseInt(req.params.id));
-  return res.status(200).json({ message: 'Note supprimée' });
+  return res.status(200).json({ message: 'Note supprimée logiquement' });
+}));
+
+router.patch('/:id/restaurer', asyncHandler(async (req, res) => {
+  await evaluationModel.restore(parseInt(req.params.id));
+  return res.status(200).json({ message: 'Note restaurée avec succès' });
 }));
 
 module.exports = router;

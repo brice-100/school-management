@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 const schema = z.object({
   nom: z.string().min(2, 'Minimum 2 caractères'),
   prenom: z.string().min(2, 'Minimum 2 caractères'),
+  matricule: z.string().min(2, 'Matricule requis'),
   dateNaissance: z.string().optional(),
   lieuNaissance: z.string().optional(),
   sexe: z.string().optional(),
@@ -44,6 +45,7 @@ export default function StudentForm() {
       getStudent(id).then(({ data }) => {
         const s = data.data;
         reset({
+          matricule: s.matricule || '',
           nom: s.nom, prenom: s.prenom,
           dateNaissance: s.dateNaissance?.split('T')[0] || '',
           lieuNaissance: s.lieuNaissance || '',
@@ -52,7 +54,7 @@ export default function StudentForm() {
           classe_id: s.classe_id?.toString() || '',
           parent_id: s.parent_id?.toString() || '',
         });
-        if (s.photo) setPreview(`${import.meta.env.VITE_API_URL.replace('/api','')}/${s.photo}`);
+        if (s.photoURL && s.photoURL !== 'INDEFINI') setPreview(`${import.meta.env.VITE_API_URL.replace('/api','')}${s.photoURL}`);
       });
     }
   }, [id, isEdit, reset]);
@@ -116,6 +118,11 @@ export default function StudentForm() {
         <div className="card p-6">
           <h2 className="font-medium text-gray-700 mb-4 text-sm uppercase tracking-wide">Informations</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label className="form-label font-bold text-primary-600">Matricule *</label>
+              <input {...register('matricule')} placeholder="Ex: 2024-001" className="input-field border-primary-200 focus:border-primary-500" />
+              <FieldError msg={errors.matricule?.message} />
+            </div>
             <div>
               <label className="form-label">Prénom *</label>
               <input {...register('prenom')} placeholder="Ariane" className="input-field" />

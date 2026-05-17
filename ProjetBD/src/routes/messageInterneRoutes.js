@@ -5,7 +5,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 const { allowAdmin, allowPersonne, allowAny } = require('../middleware/roleMiddleware');
 
 // Token requis sur toutes les routes
-router.use(authMiddleware);
+router.use(authMiddleware.protect);
 
 // Lire les messages — admin voit tout, enseignant voit les siens
 router.get('/',
@@ -38,8 +38,13 @@ router.patch('/:id/lu',
 
 // Supprimer
 router.delete('/:id',
-  allowAdmin(0, 1),
+  allowAny({ admins: [0, 1, 2, 3], personnes: [1] }),
   ctrl.remove
+);
+
+router.patch('/:id/restaurer',
+  allowAny({ admins: [0, 1, 2, 3], personnes: [1] }),
+  ctrl.restore
 );
 
 module.exports = router;

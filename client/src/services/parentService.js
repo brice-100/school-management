@@ -8,6 +8,7 @@ export const updateParent = (id, fd)    => api.put(`/parents/${id}`, fd, {
   headers: { 'Content-Type': 'multipart/form-data' }
 })
 export const updateParentStatut = (id, actif) => api.patch(`/parents/${id}/statut`, { actif })
-export const deleteParent = (id)        => updateParentStatut(id, 0)
+export const deleteParent = (id)        => api.delete(`/parents/${id}`)
+export const restoreParent = (id)       => api.patch(`/parents/${id}/restaurer`)
 export const getMesEnfants    = ()      => api.get('/parents/mes-enfants')
-export const hardDeleteParent = (id)    => api.delete(`/parents/${id}`)
+export const hardDeleteParent = (id)    => api.delete(`/parents/${id}/hard`)

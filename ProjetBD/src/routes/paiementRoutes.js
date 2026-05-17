@@ -18,5 +18,9 @@ router.post('/',           restrictTo('admin', 'parent'), paiementController.cre
 
 // Routes PATCH
 router.patch('/:id/valider', restrictTo('admin'), paiementController.valider);
+router.patch('/:id/restaurer', restrictTo('admin'), paiementController.restore);
+
+// Routes DELETE
+router.delete('/:id', restrictTo('admin'), paiementController.remove);
 
 module.exports = router;

@@ -13,33 +13,13 @@ export default function TeacherList() {
   const [ficheId, setFicheId] = useState(null)
 
   const fetchTeachers = async () => {
-    // Ne pas mettre loading à true si on a déjà des données (évite le flash blanc)
     if (teachers.length === 0) setLoading(true)
     try {
-      const { data } = await getTeachers({ search, actif: showArchives ? 0 : undefined })
-      let list = data.enseignants || data.data || []
-      
-      // Si on n'est pas dans les archives, on veut les actifs (1) ET les nouveaux (0)
-      // Mais attention, getTeachers avec actif: undefined pourrait retourner tout.
-      // On va filtrer côté client pour être sûr si besoin, ou ajuster le backend.
-      if (!showArchives) {
-        // On récupère tout et on filtre intelligemment
-        const { data: allData } = await getTeachers({ search })
-        const allList = allData.enseignants || allData.data || []
-        
-        // Sont considérés comme "Actifs" ou "À valider" :
-        // 1. Ceux qui sont actifs (1) dans l'une des deux tables
-        // 2. Ceux qui sont en attente (0) dans Personne (auto-inscription)
-        list = allList.filter(t => 
-          t.actif === 1 || 
-          t.person_actif === 1 || 
-          (t.person_actif === 0 && !t.idEnseignant) // Nouveau compte auto-inscrit
-        )
-      } else {
-        // Archives : ceux qui sont explicitement désactivés dans Enseignant
-        list = list.filter(t => t.actif === 0 && t.idEnseignant)
-      }
-
+      const { data } = await getTeachers({ 
+        search, 
+        archives: showArchives ? 1 : 0 
+      })
+      const list = data.enseignants || data.data || []
       setTeachers(list)
     } catch { 
       toast.error('Erreur chargement enseignants.') 

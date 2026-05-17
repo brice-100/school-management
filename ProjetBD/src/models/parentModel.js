@@ -14,9 +14,9 @@ const findAll = async (filters = {}) => {
     FROM Personne p
     LEFT JOIN Parents pa ON p.idPers = pa.idPers
     LEFT JOIN Eleve e ON pa.matricule = e.matricule
-    WHERE p.typePersonne = 4
+    WHERE p.typePersonne = 4 AND p.isDeleted = ?
   `;
-  const params = [];
+  const params = [filters.isDeleted !== undefined ? filters.isDeleted : 0];
   if (filters.actif !== undefined) {
     query += ' AND p.actif = ?';
     params.push(filters.actif);
@@ -35,7 +35,7 @@ const findById = async (idParent) => {
     FROM Personne p
     LEFT JOIN Parents pa ON p.idPers = pa.idPers
     LEFT JOIN Eleve e ON pa.matricule = e.matricule
-    WHERE (pa.idParent = ? OR p.idPers = ?)
+    WHERE (pa.idParent = ? OR p.idPers = ?) AND p.isDeleted = 0
     GROUP BY p.idPers, pa.idParent
     LIMIT 1
   `, [idParent, idParent]);
@@ -132,4 +132,66 @@ const findChildrenByParentIdPers = async (idPers) => {
   return Array.from(map.values());
 };
 
-module.exports = { findAll, findById, findChildrenByParentIdPers, create, updatePersonne, setActif };
+const remove = async (idPers) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('UPDATE Parents SET isDeleted = 1 WHERE idPers = ?', [idPers]);
+    await conn.query('UPDATE Personne SET isDeleted = 1 WHERE idPers = ?', [idPers]);
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
+
+const restore = async (idPers) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('UPDATE Parents SET isDeleted = 0 WHERE idPers = ?', [idPers]);
+    await conn.query('UPDATE Personne SET isDeleted = 0 WHERE idPers = ?', [idPers]);
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
+
+const removeHard = async (idPers) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    
+    // 1. Trouver les idParent liés à cet idPers
+    const [paRows] = await conn.query('SELECT idParent FROM Parents WHERE idPers = ?', [idPers]);
+    const idParents = paRows.map(r => r.idParent);
+    
+    if (idParents.length > 0) {
+      // 2. Supprimer les messages liés à ces idParent
+      await conn.query('DELETE FROM messages WHERE idParent IN (?)', [idParents]);
+    }
+    
+    // 3. Supprimer de messageinterne liés à cet idPers (expéditeur ou destinataire)
+    await conn.query('DELETE FROM messageinterne WHERE idExp_Pers = ?', [idPers]);
+    
+    // 4. Supprimer de Parents
+    await conn.query('DELETE FROM Parents WHERE idPers = ?', [idPers]);
+    
+    // 5. Supprimer de Personne
+    await conn.query('DELETE FROM Personne WHERE idPers = ?', [idPers]);
+    
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
+
+module.exports = { findAll, findById, findChildrenByParentIdPers, create, updatePersonne, setActif, remove, restore, removeHard };

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, X, Clock, Calendar } from 'lucide-react'
 import {
   getPlanningByClasse, getPlanningFormData,
-  createPlanning, deletePlanning, getMyPlanning,
+  createPlanning, deletePlanning, restorePlanning, getMyPlanning,
 } from '../../services/planningService'
 import { useAuth } from '../../context/AuthContext'
 import { useYear } from '../../context/YearContext'
@@ -39,6 +39,7 @@ export default function PlanningView() {
   const [showForm,  setShowForm]  = useState(false)
   const [loading,   setLoading]   = useState(false)
   const [formReady, setFormReady] = useState(false)
+  const [showArchives, setShowArchives] = useState(false)
 
   // IMPORTANT : stocker les IDs comme strings pour les selects
   // mais les envoyer comme entiers à l'API
@@ -74,7 +75,10 @@ export default function PlanningView() {
   const fetchPlanning = async () => {
     setLoading(true)
     try {
-      const pAca = { idAnnee: selectedYear?.idAnnee }
+      const pAca = { 
+        idAnnee: selectedYear?.idAnnee,
+        archives: showArchives ? 1 : 0
+      }
       if (isTeacher) {
         const { data } = await getMyPlanning(pAca)
         setPlanning(data.data || [])
@@ -92,8 +96,8 @@ export default function PlanningView() {
     }
   }
 
-  useEffect(() => { fetchPlanning() }, [classeId, selectedYear])
-  useEffect(() => { if (isTeacher) fetchPlanning() }, [isTeacher, selectedYear])
+  useEffect(() => { fetchPlanning() }, [classeId, selectedYear, showArchives])
+  useEffect(() => { if (isTeacher) fetchPlanning() }, [isTeacher, selectedYear, showArchives])
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -131,12 +135,21 @@ export default function PlanningView() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Supprimer ce créneau ?')) return
+    if (!window.confirm('Archiver ce créneau ?')) return
     try {
       await deletePlanning(id)
-      toast.success('Créneau supprimé.')
+      toast.success('Créneau archivé.')
       fetchPlanning()
-    } catch { toast.error('Erreur suppression.') }
+    } catch { toast.error('Erreur archivage.') }
+  }
+
+  const handleRestore = async (id) => {
+    if (!window.confirm('Restaurer ce créneau ?')) return
+    try {
+      await restorePlanning(id)
+      toast.success('Créneau restauré.')
+      fetchPlanning()
+    } catch { toast.error('Erreur restauration.') }
   }
 
   const matiereColor = (nom) => {
@@ -180,6 +193,10 @@ export default function PlanningView() {
               <option key={c.id} value={String(c.id)}>{c.nom}</option>
             ))}
           </select>
+          <button onClick={() => setShowArchives(!showArchives)} 
+            className={`btn-secondary text-xs ${showArchives ? 'bg-red-50 text-red-600 border-red-200' : ''}`}>
+            {showArchives ? 'Créneaux supprimés' : 'Archives'}
+          </button>
           {classeId && (
             <span className="flex items-center text-sm text-gray-400">
               {planning.length} créneau(x)
@@ -370,9 +387,9 @@ export default function PlanningView() {
                     ) : (
                       creneauxDuJour(jour).map(c => (
                         <div key={c.id}
-                          className={`rounded-xl border p-2.5 relative group ${matiereColor(c.matiere_nom)}`}>
+                          className={`rounded-xl border p-2.5 relative group ${c.isDeleted ? 'border-red-300 bg-red-50 text-red-800' : matiereColor(c.matiere_nom)}`}>
                           <p className="font-semibold text-xs leading-tight mb-1">
-                            {c.matiere_nom}
+                            {c.matiere_nom} {c.isDeleted && '(Archivé)'}
                           </p>
                           <div className="flex items-center gap-1">
                             <Clock size={10} />
@@ -391,12 +408,20 @@ export default function PlanningView() {
                             </p>
                           )}
                           {isAdmin && (
-                            <button onClick={() => handleDelete(c.id)}
-                              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100
-                                w-5 h-5 rounded-full bg-white/70 hover:bg-red-100
-                                flex items-center justify-center transition-all">
-                              <X size={10} className="text-red-600" />
-                            </button>
+                            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 flex gap-1">
+                              {c.isDeleted ? (
+                                <button onClick={() => handleRestore(c.id)}
+                                  className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm"
+                                  title="Restaurer">
+                                  <Plus size={10} />
+                                </button>
+                              ) : (
+                                <button onClick={() => handleDelete(c.id)}
+                                  className="w-5 h-5 rounded-full bg-white/70 hover:bg-red-100 flex items-center justify-center transition-all">
+                                  <X size={10} className="text-red-600" />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       ))

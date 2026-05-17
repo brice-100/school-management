@@ -142,4 +142,14 @@ router.delete('/:idEnseignant',
   enseignantController.remove
 );
 
+/**
+ * PATCH /api/enseignants/:idEnseignant/restaurer
+ */
+router.patch('/:idEnseignant/restaurer',
+  allowAdmin(0, 1),
+  [param('idEnseignant').isInt({ min: 1 }).withMessage('idEnseignant invalide')],
+  validate,
+  enseignantController.restore
+);
+
 module.exports = router;

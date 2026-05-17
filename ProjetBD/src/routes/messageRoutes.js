@@ -12,5 +12,6 @@ router.use(restrictTo('admin', 'parent', 'teacher'));
 router.post('/', messageController.create);
 router.put('/:id', messageController.update);
 router.delete('/:id', messageController.remove);
+router.patch('/:id/restaurer', messageController.restore);
 
 module.exports = router;

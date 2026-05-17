@@ -3,6 +3,7 @@ const pool = require('../config/db');
 const findAll = async (filters = {}) => {
   let query = `
     SELECT p.*, 
+      p.idTemps AS id,
       p.heure_debut, p.heure_fin,
       c.libelle as classe_nom, 
       cr.libelle as matiere_nom,
@@ -15,15 +16,14 @@ const findAll = async (filters = {}) => {
     LEFT JOIN Salle s ON p.idSalle = s.idSalle
     LEFT JOIN Enseignant e ON p.idEnseignant = e.idEnseignant
     LEFT JOIN Personne pers ON e.idPers = pers.idPers
+    WHERE p.isDeleted = ?
   `;
-  const params = [];
+  const params = [filters.isDeleted !== undefined ? filters.isDeleted : 0];
   
   if (filters.idPers) {
     // Si c'est un enseignant, on filtre par son idPers
-    query += ' WHERE e.idPers = ?';
+    query += ' AND e.idPers = ?';
     params.push(filters.idPers);
-  } else {
-    query += ' WHERE 1=1';
   }
   
   if (filters.idClasse) { query += ' AND p.idClasse = ?'; params.push(filters.idClasse); }
@@ -36,7 +36,7 @@ const findAll = async (filters = {}) => {
 };
 
 const findById = async (idTemps) => {
-  const [rows] = await pool.query('SELECT * FROM EmploiDuTemps WHERE idTemps = ?', [idTemps]);
+  const [rows] = await pool.query('SELECT *, idTemps AS id FROM EmploiDuTemps WHERE idTemps = ? AND isDeleted = 0', [idTemps]);
   return rows[0] || null;
 };
 
@@ -57,8 +57,13 @@ const update = async (idTemps, data) => {
 };
 
 const remove = async (idTemps) => {
-  const [result] = await pool.query('DELETE FROM EmploiDuTemps WHERE idTemps = ?', [idTemps]);
+  const [result] = await pool.query('UPDATE EmploiDuTemps SET isDeleted = 1 WHERE idTemps = ?', [idTemps]);
   return result.affectedRows;
 };
 
-module.exports = { findAll, findById, create, update, remove };
+const restore = async (idTemps) => {
+  const [result] = await pool.query('UPDATE EmploiDuTemps SET isDeleted = 0 WHERE idTemps = ?', [idTemps]);
+  return result.affectedRows;
+};
+
+module.exports = { findAll, findById, create, update, remove, restore };

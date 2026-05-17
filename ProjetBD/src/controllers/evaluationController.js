@@ -2,12 +2,18 @@ const asyncHandler = require('../utils/asyncHandler');
 const evaluationModel = require('../models/evaluationModel');
 
 const getAll = asyncHandler(async (req, res) => {
-  const evaluations = await evaluationModel.findAll(req.query);
+  const filters = { ...req.query };
+  if (req.query.archives === '1') filters.isDeleted = 1;
+  else filters.isDeleted = 0;
+  const evaluations = await evaluationModel.findAll(filters);
   return res.status(200).json({ total: evaluations.length, data: evaluations });
 });
 
 const getClasse = asyncHandler(async (req, res) => {
-  const evaluations = await evaluationModel.findAll(req.query);
+  const filters = { ...req.query };
+  if (req.query.archives === '1') filters.isDeleted = 1;
+  else filters.isDeleted = 0;
+  const evaluations = await evaluationModel.findAll(filters);
   return res.status(200).json({ total: evaluations.length, data: evaluations });
 });
 
@@ -34,7 +40,12 @@ const update = asyncHandler(async (req, res) => {
 
 const remove = asyncHandler(async (req, res) => {
   await evaluationModel.remove(parseInt(req.params.id));
-  return res.status(200).json({ message: 'Évaluation supprimée' });
+  return res.status(200).json({ message: 'Évaluation supprimée logiquement' });
 });
 
-module.exports = { getAll, getClasse, getOne, create, update, remove };
+const restore = asyncHandler(async (req, res) => {
+  await evaluationModel.restore(parseInt(req.params.id));
+  return res.status(200).json({ message: 'Évaluation restaurée avec succès' });
+});
+
+module.exports = { getAll, getClasse, getOne, create, update, remove, restore };

@@ -19,12 +19,13 @@ const getAll = asyncHandler(async (req, res) => {
     FROM MessageInterne mi
     LEFT JOIN Personne p ON mi.idExp_Pers = p.idPers
     LEFT JOIN Eleve e2 ON mi.matricule_eleve = e2.matricule
+    WHERE mi.isDeleted = ?
   `;
-  const params = [];
+  const params = [req.query.archives === '1' ? 1 : 0];
 
   // Enseignant : seulement ses propres messages
   if (userType === 'personne' && role === 1) {
-    query += ' WHERE mi.idExp_Pers = ?';
+    query += ' AND mi.idExp_Pers = ?';
     params.push(id);
   }
 
@@ -44,7 +45,7 @@ const getOne = asyncHandler(async (req, res) => {
      FROM MessageInterne mi
      LEFT JOIN Personne p ON mi.idExp_Pers = p.idPers
      LEFT JOIN Eleve e2 ON mi.matricule_eleve = e2.matricule
-     WHERE mi.idMessage = ?`,
+     WHERE mi.idMessage = ? AND mi.isDeleted = 0`,
     [parseInt(req.params.id)]
   );
   if (!rows[0]) return res.status(404).json({ message: 'Message introuvable' });
@@ -121,10 +122,18 @@ const repondre = asyncHandler(async (req, res) => {
  */
 const remove = asyncHandler(async (req, res) => {
   await pool.query(
-    'DELETE FROM MessageInterne WHERE idMessage = ?',
+    'UPDATE MessageInterne SET isDeleted = 1 WHERE idMessage = ?',
     [parseInt(req.params.id)]
   );
-  return res.status(200).json({ message: 'Message supprimé' });
+  return res.status(200).json({ message: 'Message supprimé logiquement' });
 });
 
-module.exports = { getAll, getOne, create, markAsLu, repondre, remove };
+const restore = asyncHandler(async (req, res) => {
+  await pool.query(
+    'UPDATE MessageInterne SET isDeleted = 0 WHERE idMessage = ?',
+    [parseInt(req.params.id)]
+  );
+  return res.status(200).json({ message: 'Message restauré avec succès' });
+});
+
+module.exports = { getAll, getOne, create, markAsLu, repondre, remove, restore };

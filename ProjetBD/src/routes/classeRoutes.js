@@ -13,5 +13,6 @@ router.use(restrictTo('admin'));
 router.post('/', classeController.create);
 router.put('/:id', classeController.update);
 router.delete('/:id', classeController.remove);
+router.patch('/:id/restaurer', classeController.restore);
 
 module.exports = router;

@@ -14,17 +14,18 @@ const findAll = async (filters = {}) => {
     LEFT JOIN Eleve e ON p.matricule = e.matricule
     LEFT JOIN Mode m ON p.idMode = m.idMode
     LEFT JOIN Tranches t ON p.idTranche = t.idTranche
-    WHERE 1=1
+    WHERE p.isDeleted = ?
   `;
-  const params = [];
+  const params = [filters.isDeleted !== undefined ? filters.isDeleted : 0];
 
   if (filters.matricule) {
     query += ' AND p.matricule = ?';
     params.push(filters.matricule);
   }
-  if (filters.idAca) {
+  const idAca = filters.idAca || filters.idAnnee;
+  if (idAca) {
     query += ' AND p.idAca = ?';
-    params.push(filters.idAca);
+    params.push(idAca);
   }
   const valFilter = filters.valide !== undefined && filters.valide !== '' ? filters.valide : filters.statut;
   if (valFilter !== undefined && valFilter !== '') {
@@ -52,6 +53,7 @@ const findRecents = async (limit = 10) => {
     FROM Paiement p
     LEFT JOIN Eleve e ON p.matricule = e.matricule
     LEFT JOIN Mode m ON p.idMode = m.idMode
+    WHERE p.isDeleted = 0
     ORDER BY p.dateEnregistrer DESC
     LIMIT ?
   `, [parseInt(limit)]);
@@ -72,13 +74,14 @@ const findByParent = async (idPers, filters = {}) => {
     JOIN Parents pa ON pa.matricule = e.matricule
     LEFT JOIN Mode m ON p.idMode = m.idMode
     LEFT JOIN Tranches t ON p.idTranche = t.idTranche
-    WHERE pa.idPers = ?
+    WHERE pa.idPers = ? AND p.isDeleted = 0
   `;
   const params = [idPers];
 
-  if (filters.idAca) {
+  const idAca = filters.idAca || filters.idAnnee;
+  if (idAca) {
     query += ' AND p.idAca = ?';
-    params.push(filters.idAca);
+    params.push(idAca);
   }
 
   query += ' ORDER BY p.dateEnregistrer DESC';
@@ -96,7 +99,7 @@ const findById = async (idPaie) => {
     LEFT JOIN Eleve e ON p.matricule = e.matricule
     LEFT JOIN Mode m ON p.idMode = m.idMode
     LEFT JOIN Tranches t ON p.idTranche = t.idTranche
-    WHERE p.idPaie = ?
+    WHERE p.idPaie = ? AND p.isDeleted = 0
   `, [idPaie]);
   return rows[0] || null;
 };
@@ -109,7 +112,7 @@ const create = async (data) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0)`,
     [
       data.matricule,
-      data.idAca || null,
+      data.idAca || data.idAnnee || null,
       data.montant,
       data.url || '',
       data.comentaire || '',
@@ -136,7 +139,8 @@ const valider = async (idPaie, modeReglement) => {
   return result.affectedRows;
 };
 
-const getSummaryByParent = async (idPers, idAca = null) => {
+const getSummaryByParent = async (idPers, filters = {}) => {
+  const idAca = filters.idAca || filters.idAnnee;
   // 1. Calculer le total dû (Scolarité) pour tous les enfants du parent
   let dueQuery = `
     SELECT COALESCE(SUM(s.inscription + s.pension), 0) as totalDue
@@ -149,9 +153,10 @@ const getSummaryByParent = async (idPers, idAca = null) => {
     WHERE p.idPers = ? AND e.actif = 1
   `;
   const dueParams = [idPers];
-  if (idAca) {
+  const idAcaVal = idAca;
+  if (idAcaVal) {
     dueQuery += ' AND f.idAcademi = ?';
-    dueParams.push(idAca);
+    dueParams.push(idAcaVal);
   }
   const [[{ totalDue }]] = await pool.query(dueQuery, dueParams);
 
@@ -163,9 +168,9 @@ const getSummaryByParent = async (idPers, idAca = null) => {
     WHERE pa.idPers = ? AND p.valide = 1
   `;
   const paidParams = [idPers];
-  if (idAca) {
+  if (idAcaVal) {
     paidQuery += ' AND p.idAca = ?';
-    paidParams.push(idAca);
+    paidParams.push(idAcaVal);
   }
   const [[{ totalPaid }]] = await pool.query(paidQuery, paidParams);
 
@@ -176,4 +181,14 @@ const getSummaryByParent = async (idPers, idAca = null) => {
   };
 };
 
-module.exports = { findAll, findRecents, findByParent, findById, create, valider, getSummaryByParent };
+const remove = async (idPaie) => {
+  const [result] = await pool.query('UPDATE Paiement SET isDeleted = 1 WHERE idPaie = ?', [idPaie]);
+  return result.affectedRows;
+};
+
+const restore = async (idPaie) => {
+  const [result] = await pool.query('UPDATE Paiement SET isDeleted = 0 WHERE idPaie = ?', [idPaie]);
+  return result.affectedRows;
+};
+
+module.exports = { findAll, findRecents, findByParent, findById, create, valider, getSummaryByParent, remove, restore };

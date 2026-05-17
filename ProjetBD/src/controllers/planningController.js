@@ -21,25 +21,31 @@ const getFormData = asyncHandler(async (req, res) => {
 const getByClasse = asyncHandler(async (req, res) => {
   const idClasse = parseInt(req.params.id || req.query.idClasse || req.query.id);
   const idAnnee = req.query.idAnnee;
-  const plannings = await planningModel.findAll({ idClasse, idAnnee });
+  const isDeleted = req.query.archives === '1' ? 1 : 0;
+  const plannings = await planningModel.findAll({ idClasse, idAnnee, isDeleted });
   return res.status(200).json({ data: plannings });
 });
 
 const getByTeacher = asyncHandler(async (req, res) => {
   const idPers = parseInt(req.params.id || req.query.idTeacher || req.query.idPers || req.query.id);
   const idAnnee = req.query.idAnnee;
-  const plannings = await planningModel.findAll({ idPers, idAnnee }); 
+  const isDeleted = req.query.archives === '1' ? 1 : 0;
+  const plannings = await planningModel.findAll({ idPers, idAnnee, isDeleted }); 
   return res.status(200).json({ data: plannings });
 });
 
 const getMine = asyncHandler(async (req, res) => {
   const idAnnee = req.query.idAnnee;
-  const plannings = await planningModel.findAll({ idPers: req.user.id, idAnnee }); 
+  const isDeleted = req.query.archives === '1' ? 1 : 0;
+  const plannings = await planningModel.findAll({ idPers: req.user.id, idAnnee, isDeleted }); 
   return res.status(200).json({ data: plannings });
 });
 
 const getAll = asyncHandler(async (req, res) => {
-  const plannings = await planningModel.findAll(req.query);
+  const filters = { ...req.query };
+  if (req.query.archives === '1') filters.isDeleted = 1;
+  else filters.isDeleted = 0;
+  const plannings = await planningModel.findAll(filters);
   return res.status(200).json({ data: plannings });
 });
 
@@ -48,7 +54,7 @@ const create = asyncHandler(async (req, res) => {
   
   let idAnnee = req.body.idAnnee;
   if (!idAnnee) {
-    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
+    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE statut = 1 LIMIT 1');
     idAnnee = annees.length > 0 ? annees[0].idAnnee : 1;
   }
 
@@ -90,11 +96,16 @@ const update = asyncHandler(async (req, res) => {
 
 const remove = asyncHandler(async (req, res) => {
   await planningModel.remove(parseInt(req.params.id));
-  return res.status(200).json({ message: 'Créneau supprimé' });
+  return res.status(200).json({ message: 'Créneau supprimé logiquement' });
+});
+
+const restore = asyncHandler(async (req, res) => {
+  await planningModel.restore(parseInt(req.params.id));
+  return res.status(200).json({ message: 'Créneau restauré avec succès' });
 });
 
 const getJoursSemaine = asyncHandler(async (req, res) => {
   return res.status(200).json({ data: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'] });
 });
 
-module.exports = { getFormData, getByClasse, getByTeacher, getMine, getAll, create, update, remove, getJoursSemaine };
+module.exports = { getFormData, getByClasse, getByTeacher, getMine, getAll, create, update, remove, restore, getJoursSemaine };
