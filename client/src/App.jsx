@@ -7,7 +7,7 @@ import MainLayout from './components/layout/MainLayout'
 // Auth
 import Login    from './pages/auth/Login'
 import Register from './pages/auth/Register'
-import LandingPage from "./pages/auth/landingPage"
+import LandingPage from "./pages/auth/LandingPage"
 
 // Pages
 import Dashboard         from './pages/admin/Dashboard'

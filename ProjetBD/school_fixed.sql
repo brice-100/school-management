@@ -1,3 +1,4 @@
+-- Active: 1774340325784@@127.0.0.1@3306@mysql
 CREATE TABLE `Admin`  (
   `ID` int UNSIGNED NOT NULL,
   `nom` varchar(100) NOT NULL DEFAULT 'Root',
