@@ -24,7 +24,7 @@ const getRapports = asyncHandler(async (req, res) => {
   }
   
   // Si c'est un parent, on ne montre que ses propres enfants!
-  if (req.user.role === 'parent') {
+  if (req.user.role === 4 || req.user.role === 'parent') {
     query += ` AND r.matricule IN (
       SELECT matricule FROM Parents WHERE idPers = ?
     )`;
@@ -42,7 +42,7 @@ const getRapportsCours = asyncHandler(async (req, res) => {
 });
 
 const createRapport = asyncHandler(async (req, res) => {
-  const { libelle, points, matricule, idAca, event_date, commentaire, idDiscipline } = req.body;
+  const { libelle, points, matricule, idAca, event_date, commentaire, idDiscipline, status } = req.body;
   
   let finalPoints = parseInt(points) || 0;
   if (idDiscipline) {
@@ -53,22 +53,37 @@ const createRapport = asyncHandler(async (req, res) => {
   }
   
   const [result] = await pool.query(`
-    INSERT INTO rapport (libelle, points, matricule, idAca, commentaire, event_date, idPers, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-  `, [libelle, finalPoints, matricule, parseInt(idAca) || 1, commentaire || null, event_date || null, req.user.id]);
+    INSERT INTO rapport (libelle, points, matricule, idAca, commentaire, event_date, idPers, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+  `, [libelle, finalPoints, matricule, parseInt(idAca) || 1, commentaire || null, event_date || null, req.user.id, status || 'Enregistré']);
   
   return res.status(201).json({ message: 'Rapport créé', data: { idRap: result.insertId } });
 });
 
 const updateRapport = asyncHandler(async (req, res) => {
   const idRap = parseInt(req.params.id);
-  const { libelle, commentaire } = req.body;
+  const { libelle, commentaire, status, points } = req.body;
   
+  const fields = ['libelle = ?', 'commentaire = ?'];
+  const params = [libelle, commentaire || null];
+
+  if (status) {
+    fields.push('status = ?');
+    params.push(status);
+  }
+
+  if (points !== undefined) {
+    fields.push('points = ?');
+    params.push(parseInt(points) || 0);
+  }
+
+  params.push(idRap);
+
   await pool.query(`
     UPDATE rapport 
-    SET libelle = ?, commentaire = ?
+    SET ${fields.join(', ')}
     WHERE idRap = ?
-  `, [libelle, commentaire || null, idRap]);
+  `, params);
   
   return res.status(200).json({ message: 'Rapport modifié', data: { idRap } });
 });
@@ -96,9 +111,42 @@ const createJustificatif = asyncHandler(async (req, res) => {
   return res.status(201).json({ message: 'Justificatif créé', data: { ID: result.insertId } });
 });
 
+const validerJustificatif = asyncHandler(async (req, res) => {
+  const idJustif = parseInt(req.params.id);
+  const idAdmin = req.user.id;
+
+  // 1. Mettre à jour le justificatif avec l'ID du directeur/administrateur connecté
+  await pool.query(`
+    UPDATE justificatifs 
+    SET idDirecteur = ?
+    WHERE ID = ?
+  `, [idAdmin, idJustif]);
+
+  // 2. Mettre à jour le statut du rapport associé à 'Validé'
+  const [justifRow] = await pool.query('SELECT idRapport FROM justificatifs WHERE ID = ?', [idJustif]);
+  if (justifRow[0]) {
+    await pool.query(`
+      UPDATE rapport
+      SET status = 'Validé'
+      WHERE idRap = ?
+    `, [justifRow[0].idRapport]);
+  }
+
+  return res.status(200).json({ message: 'Justificatif validé et statut du rapport mis à jour.' });
+});
+
 const getDisciplines = asyncHandler(async (req, res) => {
   const [rows] = await pool.query('SELECT * FROM discipline ORDER BY libelle ASC');
   return res.status(200).json({ disciplines: rows, data: rows });
 });
 
-module.exports = { getRapports, getRapportsCours, createRapport, updateRapport, getJustificatifs, createJustificatif, getDisciplines };
+module.exports = { 
+  getRapports, 
+  getRapportsCours, 
+  createRapport, 
+  updateRapport, 
+  getJustificatifs, 
+  createJustificatif, 
+  validerJustificatif,
+  getDisciplines 
+};

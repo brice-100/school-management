@@ -122,7 +122,7 @@ function Navbar() {
           {links.map(l => (
             <button key={l.label}
               onClick={() => scrollTo(l.href)}
-              className="px-4 py-2 text-sm font-medium text-slate-600
+              className="px-4 py-2 text-sm font-medium text-slate-800
                 hover:text-[#1B3A6B] rounded-lg hover:bg-[#1B3A6B]/5
                 transition-all duration-150">
               {l.label}
@@ -492,7 +492,7 @@ function HeroSection() {
               Accéder à mon espace
               <ChevronRight size={18} className="ml-1" />
             </Button>
-            <Button variant="secondary" size="lg" href="/register"
+            <Button variant="primary" size="lg" href="/register"
               className="!text-white !border-white/30 hover:!bg-white/10">
               Créer un compte
             </Button>

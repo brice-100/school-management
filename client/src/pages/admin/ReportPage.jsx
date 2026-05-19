@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import {
   getRapports, createRapport, updateRapport,
-  getJustificatifs, createJustificatif,
+  getJustificatifs, createJustificatif, validerJustificatif,
   getDisciplines,
 } from '../../services/reportService'
 import { getStudents } from '../../services/studentService'
@@ -66,17 +66,38 @@ function JustificatifsModal({ rapport, onClose, isParent }) {
         ) : (
           <div className="space-y-2 mb-4">
             {items.map(j => (
-              <div key={j.ID} className="bg-gray-50 rounded-xl p-3">
-                <p className="text-sm text-gray-700">{j.commentaire}</p>
-                {j.urlDoc && (
-                  <a href={j.urlDoc} target="_blank" rel="noreferrer"
-                    className="text-xs text-primary-500 hover:underline mt-1 block">
-                    Voir le document
-                  </a>
-                )}
-                <p className="text-xs text-gray-400 mt-1">
-                  {j.idDirecteur ? '✅ Validé' : '⏳ En attente'}
-                </p>
+              <div key={j.ID} className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between gap-2">
+                <div>
+                  <p className="text-sm text-gray-700">{j.commentaire}</p>
+                  {j.urlDoc && (
+                    <a href={j.urlDoc} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary-500 hover:underline mt-1">
+                      Voir le document
+                    </a>
+                  )}
+                </div>
+                <div className="flex justify-between items-center border-t border-gray-100/50 pt-2 mt-1">
+                  <p className="text-xs text-gray-400">
+                    {j.idDirecteur ? '✅ Validé' : '⏳ En attente'}
+                  </p>
+                  {!j.idDirecteur && !isParent && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await validerJustificatif(j.ID)
+                          toast.success('Justificatif validé et statut mis à jour !')
+                          const { data } = await getJustificatifs({ idRapport: rapport.idRap })
+                          setItems(data.justificatifs || data.data || [])
+                        } catch {
+                          toast.error('Erreur lors de la validation.')
+                        }
+                      }}
+                      className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold rounded-lg transition-all"
+                    >
+                      Valider l'absence
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -203,6 +224,22 @@ export default function ReportsPage() {
       idAca: r.idAca, event_date: r.event_date?.split('T')[0] || '',
       commentaire: r.commentaire || '', idDiscipline: '' })
     setShowForm(true)
+  }
+
+  const handleCancelAbsence = async (r) => {
+    if (!window.confirm('Voulez-vous vraiment annuler cette absence et réinitialiser les points de malus à 0 ?')) return
+    try {
+      await updateRapport(r.idRap, {
+        libelle: r.libelle,
+        points: 0,
+        status: 'Annulé',
+        commentaire: r.commentaire || ''
+      })
+      toast.success('Absence annulée et points de malus remis à 0 !')
+      fetchRapports()
+    } catch {
+      toast.error('Erreur lors de l\'annulation de l\'absence.')
+    }
   }
 
   const rapportsFiltres = search
@@ -391,10 +428,13 @@ export default function ReportsPage() {
                     {fmtDate(r.event_date)}
                   </td>
                   <td className="px-5 py-3.5">
-                    {r.justifie
-                      ? <span className="badge bg-emerald-50 text-emerald-700">✓ Oui</span>
-                      : <span className="badge bg-gray-100 text-gray-500">Non</span>
-                    }
+                    {r.status === 'Annulé' ? (
+                      <span className="badge bg-gray-100 text-gray-400 border border-gray-200">Annulé (0 pts)</span>
+                    ) : r.justifie || r.status === 'Validé' ? (
+                      <span className="badge bg-emerald-50 text-emerald-700">✓ Oui</span>
+                    ) : (
+                      <span className="badge bg-gray-100 text-gray-500">Non</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1.5">
@@ -405,7 +445,18 @@ export default function ReportsPage() {
                           rounded-lg transition-colors">
                         <FileText size={12} /> Justif.
                       </button>
-                      {(isAdmin || isTeacher) && (
+                      {isAdmin && r.status === 'Validé' && (
+                        <button
+                          onClick={() => handleCancelAbsence(r)}
+                          className="flex items-center gap-1 px-2 py-1 bg-rose-50
+                            hover:bg-rose-100 text-rose-700 text-xs font-semibold
+                            rounded-lg transition-colors"
+                          title="Annuler l'absence et les points"
+                        >
+                          Annuler
+                        </button>
+                      )}
+                      {(isAdmin || isTeacher) && r.status !== 'Annulé' && (
                         <button onClick={() => handleEdit(r)} className="btn-icon">
                           <Pencil size={14} />
                         </button>

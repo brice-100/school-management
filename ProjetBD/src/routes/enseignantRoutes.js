@@ -48,7 +48,7 @@ const createValidation = [
  * Accessible : admin (tous) + administratif + scolarité
  */
 router.get('/',
-  allowAny({ admins: [0, 1, 2, 3], personnes: [2, 3] }),
+  allowAny({ admins: [0, 1, 2, 3], personnes: [1, 2, 3, 4] }),
   enseignantController.getAll
 );
 

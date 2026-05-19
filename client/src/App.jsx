@@ -39,6 +39,12 @@ import SalaryTeacherPage from './pages/admin/SalaryTeacherPage'
 import ChangePassword    from './pages/auth/ChangePassword'
 import TeacherMessaging from './pages/teacher/TeacherMessaging'
 import TeacherStudents from './pages/teacher/TeacherStudents'
+import TeacherAbsences from './pages/teacher/TeacherAbsences'
+import TeacherDevoirs from './pages/teacher/TeacherDevoirs'
+import ParentAbsences from './pages/parents/ParentAbsences'
+import ParentTimetable from './pages/parents/ParentTimetable'
+import DevoirsParent from './pages/parents/DevoirsParent'
+import ParentMessaging from './pages/parents/ParentMessaging'
 
 
 import { YearProvider } from './context/YearContext'
@@ -103,6 +109,12 @@ export default function App() {
 <Route path="/change-password"     element={<Adm c={<ChangePassword/>} />}  />
 <Route path="/teacher/messagerie"  element={<Any c={<TeacherMessaging />} />} />
 <Route path="/teacher/eleves"      element={<AT  c={<TeacherStudents />} />} />
+<Route path="/teacher/absences"    element={<AT  c={<TeacherAbsences />} />} />
+<Route path="/teacher/devoirs"     element={<AT  c={<TeacherDevoirs />} />} />
+<Route path="/parent/absences"     element={<AP  c={<ParentAbsences />} />} />
+<Route path="/parent/emploi-du-temps" element={<AP  c={<ParentTimetable />} />} />
+<Route path="/parent/devoirs"      element={<AP  c={<DevoirsParent />} />} />
+<Route path="/parent/messagerie"   element={<AP  c={<ParentMessaging />} />} />
 
           {/* Redirections */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

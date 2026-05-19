@@ -56,6 +56,8 @@ app.use('/api/emploi-du-temps', require('./routes/planningRoutes'));
 app.use('/api/livres', require('./routes/livreRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/messages-internes', require('./routes/messageInterneRoutes'));
+app.use('/api/messages-parents', require('./routes/messageParentRoutes'));
+app.use('/api/devoirs', require('./routes/devoirRoutes'));
 app.use('/api/fiches-enseignant', require('./routes/salaireRoutes'));
 app.use('/api/salaires', require('./routes/salaireRoutes'));
 app.use('/api/enseignant/salaire', require('./routes/enseignantSalaireRoutes'));
@@ -69,9 +71,11 @@ app.use('/api/specialites', require('./routes/specialiteRoutes'));
 const planningController = require('./controllers/planningController');
 app.get('/api/jours-semaine', planningController.getJoursSemaine);
 
+const { protect, restrictTo } = require('./middleware/authMiddleware');
 const rapportController = require('./controllers/rapportController');
 app.get('/api/justificatifs', rapportController.getJustificatifs);
 app.post('/api/justificatifs', rapportController.createJustificatif);
+app.put('/api/justificatifs/:id/valider', protect, restrictTo('admin'), rapportController.validerJustificatif);
 app.get('/api/disciplines', rapportController.getDisciplines);
 
 // ─── Route de santé ──────────────────────────────────────────

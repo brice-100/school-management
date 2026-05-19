@@ -29,6 +29,8 @@ const NAV_BY_ROLE = {
   teacher: [
     { to: '/dashboard',      icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/teacher/eleves', icon: Users,           label: 'Mes élèves' },
+    { to: '/teacher/absences', icon: AlertTriangle, label: 'Saisie Absences' },
+    { to: '/teacher/devoirs', icon: BookOpen,        label: 'Publier Devoir' },
     { to: '/grades',         icon: BookOpen,        label: 'Mes notes' },
     { to: '/planning',       icon: Calendar,        label: 'Mon planning' },
     { to: '/evaluations',    icon: ClipboardCheck,  label: 'Évaluations' },
@@ -40,9 +42,12 @@ const NAV_BY_ROLE = {
   parent: [
     { to: '/dashboard',      icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/mon-enfant',     icon: Users,           label: 'Mes enfants' },
+    { to: '/parent/absences', icon: AlertTriangle, label: 'Suivi Absences' },
+    { to: '/parent/emploi-du-temps', icon: Calendar, label: 'Emploi du Temps' },
+    { to: '/parent/devoirs',  icon: Book,            label: 'Cahier de Textes' },
     { to: '/bulletins',      icon: FileText,        label: 'Bulletins' },
     { to: '/paiements',      icon: CreditCard,      label: 'Mes paiements' },
-    { to: '/messagerie',     icon: MessageSquare,   label: 'Messagerie' },
+    { to: '/parent/messagerie', icon: MessageSquare, label: 'Messagerie Enseignants' },
   ],
 }
 

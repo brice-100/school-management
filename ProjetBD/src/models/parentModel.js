@@ -114,7 +114,7 @@ const setActif = async (id, actif) => {
 
 const findChildrenByParentIdPers = async (idPers) => {
   const [rows] = await pool.query(`
-    SELECT e.*, c.libelle as classe, s.libelle as salle
+    SELECT e.*, c.libelle as classe, s.libelle as salle, s.idClasse, s.idSalle
     FROM Eleve e
     JOIN Parents pa ON e.matricule = pa.matricule
     LEFT JOIN Frequente f ON e.matricule = f.matricule
