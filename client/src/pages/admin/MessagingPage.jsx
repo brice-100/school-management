@@ -12,6 +12,7 @@ import {
   getInternalMessages, replyInternalMessage,
   markInternalAsLu, deleteInternalMessage
 } from '../../services/messageService'
+import { getMessagesParents, repondreMessageParent, markMessageParentLu, createMessageParent } from '../../services/messageParentService'
 import { getParents } from '../../services/parentService'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
@@ -205,8 +206,8 @@ function NouveauMessageForm({ parents, onSuccess, onCancel, isAdmin, isTeacher }
         toast.success('Message envoyé à l\'administration !')
       } else {
         if (!form.idParent) return toast.error('Destinataire requis.')
-        await sendMessage(form)
-        toast.success('Message envoyé !')
+        await createMessageParent({ destType: 'parent', idParent: parseInt(form.idParent), objet: form.objet, contenu: form.information })
+        toast.success('Message envoyé au parent !')
       }
       onSuccess()
     } catch (err) {
@@ -411,6 +412,133 @@ function ReplyInternalForm({ original, onSuccess, onCancel }) {
   )
 }
 
+// ── Bulle de message Parent (Nouveau Système) ─────────────────────
+function ParentMessageBubble({ msg, onReply, onLu }) {
+  const isRead = Boolean(msg.reponse) || Boolean(msg.lu); 
+
+  return (
+    <div
+      className={`card p-4 hover:shadow-sm transition-all
+        ${!isRead ? 'border-l-4 border-primary-500 bg-primary-50/5' : 'border-l-4 border-transparent'}`}
+    >
+      <div className="flex items-start gap-3">
+        {/* Avatar */}
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs
+          font-semibold shrink-0 ${isRead ? 'bg-gray-100 text-gray-500' : 'bg-primary-100 text-primary-600'}`}>
+          {!isRead ? <Mail size={15} /> : <MailOpen size={15} />}
+        </div>
+
+        {/* Contenu */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <p className={`text-sm font-semibold ${!isRead ? 'text-gray-900' : 'text-gray-600'}`}>
+              {msg.objet}
+            </p>
+            <span className="badge text-[10px] bg-primary-50 text-primary-700">Parent</span>
+            {!isRead && (
+              <span className="w-2 h-2 rounded-full bg-primary-500 shrink-0" />
+            )}
+          </div>
+          
+          <p className="text-gray-500 text-xs mb-1">
+            De : <span className="font-semibold text-gray-700">{msg.parent_nom || msg.exp_nom}</span>
+          </p>
+
+          <p className="text-gray-600 text-sm whitespace-pre-wrap mt-1.5">{msg.contenu}</p>
+
+          {msg.reponse && (
+            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 mt-3">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Votre réponse :</p>
+              <p className="text-xs text-gray-700 whitespace-pre-wrap">{msg.reponse}</p>
+              {msg.repondu_at && (
+                <p className="text-[10px] text-gray-400 mt-1">{fmtDate(msg.repondu_at)}</p>
+              )}
+            </div>
+          )}
+
+          <p className="text-gray-400 text-[10px] mt-2">{fmtDate(msg.created_at)}</p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {!isRead && onLu && (
+            <button
+              onClick={() => onLu(msg.idMsg)}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50
+                hover:bg-blue-100 text-blue-700 text-xs font-medium rounded-lg transition-colors"
+            >
+              Marquer lu
+            </button>
+          )}
+          {!msg.reponse && onReply && (
+            <button
+              onClick={() => onReply(msg)}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-primary-50
+                hover:bg-primary-100 text-primary-700 text-xs font-medium rounded-lg transition-colors"
+            >
+              <Send size={12} /> Répondre
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Formulaire réponse Parent (Nouveau Système) ───────────────────
+function ReplyParentForm({ original, onSuccess, onCancel }) {
+  const [text, setText] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!text.trim()) return toast.error('Message vide.')
+    setLoading(true)
+    try {
+      await repondreMessageParent(original.idMsg, text)
+      toast.success('Réponse envoyée !')
+      onSuccess()
+    } catch (err) {
+      toast.error(err.message || 'Erreur.')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-semibold text-gray-900">Répondre</h3>
+          <button onClick={onCancel} className="btn-icon"><X size={16} /></button>
+        </div>
+
+        {/* Message original */}
+        <div className="bg-gray-50 rounded-xl p-3 mb-4">
+          <p className="text-xs text-gray-400 mb-1">Message de {original.parent_nom || original.exp_nom}</p>
+          <p className="text-sm font-medium text-gray-700">{original.objet}</p>
+          <p className="text-xs text-gray-500 mt-1 line-clamp-2">{original.contenu}</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="form-label font-medium mb-1 block">Votre réponse *</label>
+            <textarea value={text} onChange={e => setText(e.target.value)}
+              placeholder="Rédigez votre réponse..."
+              rows={4} className="input-field resize-none" />
+          </div>
+          <div className="flex gap-3">
+            <button type="submit" disabled={loading} className="btn-primary flex-1">
+              {loading ? 'Envoi...' : <><Send size={14} /> Envoyer</>}
+            </button>
+            <button type="button" onClick={onCancel} className="btn-secondary">
+              Annuler
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Page principale ───────────────────────────────────────────────
 export default function MessagingPage() {
   const { user } = useAuth()
@@ -438,8 +566,11 @@ export default function MessagingPage() {
       let data
       if (isAdmin) {
         if (activeSegment === 'parents') {
-          const res = await getAllMessages({ valider: filterVal, limit: 50 })
-          data = res.data.messages || res.data.data || []
+          const res = await getMessagesParents()
+          data = res.data.data || []
+          if (filterVal === '0') {
+            data = data.filter(m => !m.reponse)
+          }
         } else {
           const res = await getInternalMessages()
           data = res.data.data || []
@@ -610,10 +741,10 @@ export default function MessagingPage() {
                     : 'text-gray-500 hover:text-gray-700'}`}>
                 <Icon size={14} />
                 {t.label}
-                {t.key === 'attente' && messages.filter(m => !m.valider).length > 0 && (
+                {t.key === 'attente' && messages.filter(m => m.reponse == null && m.destType === 'admin').length > 0 && (
                   <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-xs
                     flex items-center justify-center font-bold">
-                    {messages.filter(m => !m.valider).length}
+                    {messages.filter(m => m.reponse == null && m.destType === 'admin').length}
                   </span>
                 )}
               </button>
@@ -667,6 +798,13 @@ export default function MessagingPage() {
                 onReply={setReplyToTeacher}
                 onDelete={handleDeleteTeacherMsg}
               />
+            ) : isAdmin && activeSegment === 'parents' ? (
+              <ParentMessageBubble
+                key={msg.idMsg}
+                msg={msg}
+                onLu={async (id) => { await markMessageParentLu(id); fetchMessages(); }}
+                onReply={setReplyTo}
+              />
             ) : (
               <MessageBubble
                 key={msg.idMessages}
@@ -693,11 +831,19 @@ export default function MessagingPage() {
       )}
 
       {replyTo && (
-        <ReplyForm
-          original={replyTo}
-          onSuccess={() => { setReplyTo(null); fetchMessages() }}
-          onCancel={() => setReplyTo(null)}
-        />
+        isAdmin && activeSegment === 'parents' ? (
+          <ReplyParentForm
+            original={replyTo}
+            onSuccess={() => { setReplyTo(null); fetchMessages() }}
+            onCancel={() => setReplyTo(null)}
+          />
+        ) : (
+          <ReplyForm
+            original={replyTo}
+            onSuccess={() => { setReplyTo(null); fetchMessages() }}
+            onCancel={() => setReplyTo(null)}
+          />
+        )
       )}
 
       {replyToTeacher && (

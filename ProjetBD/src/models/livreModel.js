@@ -1,9 +1,14 @@
 const pool = require('../config/db');
 
 const findAll = async (filters = {}) => {
-  let query = 'SELECT * FROM Livres WHERE 1=1';
+  let query = `
+    SELECT l.*, s.libelle AS libelleSpecialite 
+    FROM Livres l 
+    LEFT JOIN Specialite s ON l.idSpecialite = s.idSpecialite 
+    WHERE 1=1
+  `;
   const params = [];
-  query += ' ORDER BY idLivre DESC';
+  query += ' ORDER BY l.idLivre DESC';
   const [rows] = await pool.query(query, params);
   return rows;
 };

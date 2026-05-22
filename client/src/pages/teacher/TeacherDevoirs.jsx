@@ -11,6 +11,13 @@ import toast from 'react-hot-toast'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
 
+const getFileUrl = (url) => {
+  if (!url) return '#';
+  if (url.startsWith('http')) return url;
+  const baseUrl = import.meta.env.VITE_API_URL.replace('/api', '');
+  return `${baseUrl}${url}`;
+};
+
 export default function TeacherDevoirs() {
   const { user } = useAuth()
 
@@ -108,7 +115,7 @@ export default function TeacherDevoirs() {
       formData.append('urlDoc', form.urlDoc)
     }
     if (selectedFile) {
-      formData.append('file', selectedFile)
+      formData.append('document', selectedFile)
     }
 
     try {
@@ -250,7 +257,7 @@ export default function TeacherDevoirs() {
                 <div className="flex justify-between items-center gap-2">
                   {d.urlDoc ? (
                     <a
-                      href={d.urlDoc}
+                      href={getFileUrl(d.urlDoc)}
                       target="_blank"
                       rel="noreferrer"
                       className="flex items-center gap-1 text-xs text-primary-600 hover:underline font-semibold"

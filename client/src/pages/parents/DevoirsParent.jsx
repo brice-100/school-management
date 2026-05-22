@@ -12,6 +12,13 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR', {
   day: '2-digit', month: 'long', year: 'numeric',
 }) : null
 
+const getFileUrl = (url) => {
+  if (!url) return '#';
+  if (url.startsWith('http')) return url;
+  const baseUrl = import.meta.env.VITE_API_URL.replace('/api', '');
+  return `${baseUrl}${url}`;
+};
+
 // ── Carte Devoir ──────────────────────────────────────────────────
 function DevoirCard({ devoir, onClick }) {
   const isLate = devoir.date_rendu && new Date(devoir.date_rendu) < new Date();
@@ -59,7 +66,7 @@ function DevoirCard({ devoir, onClick }) {
         <div className="flex justify-between items-center mt-2">
           {devoir.urlDoc ? (
             <a
-              href={devoir.urlDoc}
+              href={getFileUrl(devoir.urlDoc)}
               target="_blank"
               rel="noreferrer"
               onClick={e => e.stopPropagation()}
@@ -334,7 +341,7 @@ function DevoirDetailModal({ devoir, onClose }) {
                 {isImage ? (
                   <div className="rounded-2xl border border-gray-100 overflow-hidden shadow-sm bg-gray-50 p-2">
                     <img
-                      src={devoir.urlDoc}
+                      src={getFileUrl(devoir.urlDoc)}
                       alt="Aperçu du devoir"
                       className="w-full max-h-[300px] object-contain rounded-xl"
                     />
@@ -345,7 +352,7 @@ function DevoirDetailModal({ devoir, onClose }) {
                     <p className="text-sm font-semibold text-indigo-900">Document PDF joint</p>
                     <p className="text-xs text-indigo-600 mb-4">Cliquez ci-dessous pour ouvrir ou télécharger le PDF.</p>
                     <a
-                      href={devoir.urlDoc}
+                      href={getFileUrl(devoir.urlDoc)}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-indigo-100"
@@ -359,7 +366,7 @@ function DevoirDetailModal({ devoir, onClose }) {
                     <p className="text-sm font-semibold text-gray-700">Ressource additionnelle</p>
                     <p className="text-xs text-gray-400 mb-4">Un fichier est joint à cet exercice.</p>
                     <a
-                      href={devoir.urlDoc}
+                      href={getFileUrl(devoir.urlDoc)}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-gray-200"

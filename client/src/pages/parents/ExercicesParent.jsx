@@ -21,6 +21,13 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR', {
   day: '2-digit', month: 'long', year: 'numeric',
 }) : null
 
+const getFileUrl = (url) => {
+  if (!url) return '#';
+  if (url.startsWith('http')) return url;
+  const baseUrl = import.meta.env.VITE_API_URL.replace('/api', '');
+  return `${baseUrl}${url}`;
+};
+
 // ── Carte épreuve ─────────────────────────────────────────────────
 function EpreuveCard({ epreuve }) {
   return (
@@ -58,7 +65,7 @@ function EpreuveCard({ epreuve }) {
           {/* Lien document */}
           {epreuve.urlDoc && epreuve.urlDoc !== 'INDEFINI' && (
             <a
-              href={epreuve.urlDoc}
+              href={getFileUrl(epreuve.urlDoc)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium

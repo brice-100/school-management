@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, Pencil, Trash2, Book, X } from 'lucide-react'
 import { getLivres, getLivre, createLivre, updateLivre, deleteLivre,
-  getSpecialites,} from '../../services/libraryService'
+  getSpecialites, createSpecialite } from '../../services/libraryService'
 import toast from 'react-hot-toast'
 
 export default function LibraryPage() {
@@ -65,6 +65,19 @@ export default function LibraryPage() {
     } catch (err) { toast.error(err.message || 'Erreur.') }
   }
 
+  const handleAddSpecialite = async () => {
+    const libelle = window.prompt("Nom de la nouvelle spécialité :")
+    if (!libelle) return;
+    try {
+      const { data } = await createSpecialite({ libelle })
+      toast.success('Spécialité ajoutée')
+      setSpecialites(prev => [...prev, data.data])
+      setForm(f => ({ ...f, idSpecialite: data.data.idSpecialite }))
+    } catch (err) {
+      toast.error(err.message || 'Erreur')
+    }
+  }
+
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer ce livre ?')) return
     try {
@@ -98,7 +111,12 @@ export default function LibraryPage() {
                 placeholder="Titre du livre" className="input-field" />
             </div>
             <div>
-              <label className="form-label">Spécialité *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="form-label mb-0">Spécialité *</label>
+                <button type="button" onClick={handleAddSpecialite} className="text-xs text-primary-600 hover:text-primary-700 font-medium">
+                  + Nouvelle
+                </button>
+              </div>
               <select value={form.idSpecialite} onChange={e => set('idSpecialite', e.target.value)}
                 className="select-field">
                 <option value="">— Choisir —</option>
