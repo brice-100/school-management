@@ -16,7 +16,7 @@ app.use(cors({
       process.env.CLIENT_URL // Cette variable contiendra votre lien Vercel
     ];
     // Autoriser les requêtes sans origine (comme Postman) ou venant de localhost/127.0.0.1
-    if (!origin || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+    if (!origin ||  allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(null, process.env.CLIENT_URL || 'http://localhost:5173');
