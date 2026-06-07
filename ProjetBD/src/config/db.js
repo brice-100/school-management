@@ -3,9 +3,9 @@ const mysql = require('mysql2/promise');
 // Support Railway MYSQL_URL ou variables individuelles
 function getDbConfig() {
   const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL;
-  
+
   if (dbUrl) {
-    console.log('📡 Connexion MySQL via URL');
+    console.log('📡 Connexion MySQL via URL (MYSQL_URL)');
     const url = new URL(dbUrl);
     return {
       host:     url.hostname,
@@ -16,6 +16,7 @@ function getDbConfig() {
     };
   }
 
+  console.log('📡 Connexion MySQL via variables individuelles (DB_HOST/PORT/USER...)');
   return {
     host:     process.env.DB_HOST     || '127.0.0.1',
     port:     parseInt(process.env.DB_PORT) || 3306,
@@ -28,14 +29,20 @@ function getDbConfig() {
 const dbConfig = getDbConfig();
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Sur Railway réseau interne (mysql.railway.internal), SSL n'est pas nécessaire
+// Sur Railway proxy public (*.proxy.rlwy.net), SSL est requis
+const isInternalHost = dbConfig.host && dbConfig.host.includes('railway.internal');
+const needsSsl = isProduction && !isInternalHost;
+
+console.log(`🔧 DB Config → host: ${dbConfig.host}, port: ${dbConfig.port}, db: ${dbConfig.database}, ssl: ${needsSsl}`);
+
 const pool = mysql.createPool({
   ...dbConfig,
   connectionLimit:    parseInt(process.env.DB_POOL_LIMIT) || 10,
   waitForConnections: true,
   queueLimit:         0,
   dateStrings:        false,
-  // SSL requis en production (Railway MySQL)
-  ...(isProduction && { ssl: { rejectUnauthorized: false } }),
+  ...(needsSsl && { ssl: { rejectUnauthorized: false } }),
 });
 
 // Test de connexion au démarrage (non bloquant en prod)
@@ -45,12 +52,11 @@ pool.getConnection()
     conn.release();
   })
   .catch(err => {
-    console.error('❌ Impossible de se connecter à MySQL :', err.message);
+    console.error(`❌ Connexion MySQL échouée [${dbConfig.host}:${dbConfig.port}] :`, err.message);
     if (!isProduction) {
-      process.exit(1); // En local, on arrête
+      process.exit(1);
     }
-    // En production, on laisse le serveur démarrer — les requêtes échoueront mais Railway peut retry
-    console.error('⚠️  Le serveur démarre sans connexion DB — les requêtes échoueront');
+    console.error('⚠️  Le serveur démarre sans connexion DB — Railway peut retry');
   });
 
 module.exports = pool;
