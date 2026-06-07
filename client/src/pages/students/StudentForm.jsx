@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Upload, UserCircle } from 'lucide-react';
-import { createStudent, updateStudent, getStudent } from '../../services/studentService';
+import { createStudent, updateStudent, getStudent, getNextMatricule } from '../../services/studentService';
 import { getClasses } from '../../services/classService';
 import { getParents } from '../../services/parentService';
 import toast from 'react-hot-toast';
@@ -35,7 +35,22 @@ export default function StudentForm() {
   const [photoFile, setPhotoFile] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({ resolver: zodResolver(schema) });
+
+  const selectedClass = watch('classe_id');
+
+  // Auto-generate matricule when class changes (only if creating a new student)
+  useEffect(() => {
+    if (!isEdit && selectedClass) {
+      getNextMatricule(selectedClass)
+        .then(({ data }) => {
+          if (data.data) {
+            setValue('matricule', data.data, { shouldValidate: true });
+          }
+        })
+        .catch(err => console.error('Erreur génération matricule', err));
+    }
+  }, [selectedClass, isEdit, setValue]);
 
   useEffect(() => {
     Promise.all([getClasses(), getParents()])
@@ -120,7 +135,12 @@ export default function StudentForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="form-label font-bold text-primary-600">Matricule *</label>
-              <input {...register('matricule')} placeholder="Ex: 2024-001" className="input-field border-primary-200 focus:border-primary-500" />
+              <input 
+                {...register('matricule')} 
+                placeholder={isEdit ? "Ex: 2024-001" : "Généré automatiquement selon la classe..."} 
+                className="input-field border-primary-200 focus:border-primary-500 bg-gray-50" 
+                readOnly={!isEdit} // Optionnel: empêcher la modif manuelle lors de l'ajout
+              />
               <FieldError msg={errors.matricule?.message} />
             </div>
             <div>

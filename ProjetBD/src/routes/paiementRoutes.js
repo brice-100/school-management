@@ -6,8 +6,10 @@ const { protect, restrictTo } = require('../middleware/authMiddleware');
 router.use(protect);
 
 // Routes GET
+router.get('/details-enfants', paiementController.getDetailsEnfants);  // parent
 router.get('/mon-compte',  paiementController.getParentPaiements);
 router.get('/summary',     paiementController.getSummary);
+router.get('/situation-financiere', restrictTo('admin'), paiementController.getSituationFinanciere);
 router.get('/recents',     restrictTo('admin'), paiementController.getRecents);
 router.get('/',            restrictTo('admin'), paiementController.getAll);
 router.get('/:id',         paiementController.getOne);

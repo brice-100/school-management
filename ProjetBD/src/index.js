@@ -71,11 +71,11 @@ app.use('/api/specialites', require('./routes/specialiteRoutes'));
 const planningController = require('./controllers/planningController');
 app.get('/api/jours-semaine', planningController.getJoursSemaine);
 
-const { protect, restrictTo } = require('./middleware/authMiddleware');
+const authMW = require('./middleware/authMiddleware');
 const rapportController = require('./controllers/rapportController');
 app.get('/api/justificatifs', rapportController.getJustificatifs);
 app.post('/api/justificatifs', rapportController.createJustificatif);
-app.put('/api/justificatifs/:id/valider', protect, restrictTo('admin'), rapportController.validerJustificatif);
+app.put('/api/justificatifs/:id/valider', authMW, authMW.restrictTo('admin', 'teacher', 'scolarite'), rapportController.validerJustificatif);
 app.get('/api/disciplines', rapportController.getDisciplines);
 
 // ─── Route de santé ──────────────────────────────────────────

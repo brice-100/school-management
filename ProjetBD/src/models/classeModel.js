@@ -2,9 +2,12 @@ const pool = require('../config/db');
 
 const findAll = async (filters = {}) => {
   let query = `
-    SELECT c.*, cy.libelle as cycle_nom 
+    SELECT c.*, cy.libelle as cycle_nom,
+      COALESCE(c.pension, s.pension) as pension_effective,
+      COALESCE(c.inscription, s.inscription) as inscription_effective
     FROM Classe c
     LEFT JOIN Cycle cy ON c.idCycle = cy.idCycle
+    LEFT JOIN Scolarite s ON s.idCycle = c.idCycle
     WHERE c.isDeleted = ?
     ORDER BY c.libelle ASC
   `;
@@ -14,7 +17,15 @@ const findAll = async (filters = {}) => {
 };
 
 const findById = async (idClasse) => {
-  const [rows] = await pool.query('SELECT * FROM Classe WHERE idClasse = ? AND isDeleted = 0', [idClasse]);
+  const [rows] = await pool.query(`
+    SELECT c.*, cy.libelle as cycle_nom,
+      COALESCE(c.pension, s.pension) as pension_effective,
+      COALESCE(c.inscription, s.inscription) as inscription_effective
+    FROM Classe c
+    LEFT JOIN Cycle cy ON c.idCycle = cy.idCycle
+    LEFT JOIN Scolarite s ON s.idCycle = c.idCycle
+    WHERE c.idClasse = ? AND c.isDeleted = 0
+  `, [idClasse]);
   return rows[0] || null;
 };
 
@@ -28,8 +39,14 @@ const create = async (data) => {
 
 const update = async (idClasse, data) => {
   const [result] = await pool.query(
-    'UPDATE Classe SET libelle = ?, idCycle = ? WHERE idClasse = ?',
-    [data.libelle, data.idCycle, idClasse]
+    'UPDATE Classe SET libelle = ?, idCycle = ?, pension = ?, inscription = ? WHERE idClasse = ?',
+    [
+      data.libelle,
+      data.idCycle,
+      data.pension !== undefined && data.pension !== '' ? parseFloat(data.pension) : null,
+      data.inscription !== undefined && data.inscription !== '' ? parseFloat(data.inscription) : null,
+      idClasse
+    ]
   );
   return result.affectedRows;
 };

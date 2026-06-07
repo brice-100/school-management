@@ -139,6 +139,21 @@ const getSummary = asyncHandler(async (req, res) => {
   return res.status(200).json({ data: summary });
 });
 
+/**
+ * GET /api/paiements/details-enfants
+ * Parent : détail des paiements par enfant (montant dû, payé, reste)
+ */
+const getDetailsEnfants = asyncHandler(async (req, res) => {
+  const idPers = req.user.id;
+  const details = await paiementModel.getDetailsEnfants(idPers, req.query);
+  return res.status(200).json({ total: details.length, data: details });
+});
+
+const getSituationFinanciere = asyncHandler(async (req, res) => {
+  const situation = await paiementModel.getSituationFinanciere(req.query);
+  return res.status(200).json({ total: situation.length, data: situation });
+});
+
 const remove = asyncHandler(async (req, res) => {
   await paiementModel.remove(parseInt(req.params.id));
   return res.status(200).json({ message: 'Paiement supprimé logiquement' });
@@ -149,4 +164,4 @@ const restore = asyncHandler(async (req, res) => {
   return res.status(200).json({ message: 'Paiement restauré avec succès' });
 });
 
-module.exports = { getAll, getRecents, getParentPaiements, getSummary, getOne, create, initier, valider, remove, restore };
+module.exports = { getAll, getRecents, getParentPaiements, getSummary, getDetailsEnfants, getSituationFinanciere, getOne, create, initier, valider, remove, restore };

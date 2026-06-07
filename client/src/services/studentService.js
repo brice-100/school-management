@@ -10,5 +10,6 @@ export const updateStudent = (matricule, data) => api.put(`/eleves/${matricule}`
 export const deleteStudent = (matricule)     => api.delete(`/eleves/${matricule}`)
 export const restoreStudent = (matricule)    => api.patch(`/eleves/${matricule}/restaurer`)
 export const toggleActif    = (matricule, actif) => api.patch(`/eleves/${matricule}/statut`, { actif })
+export const getNextMatricule = (classe_id)  => api.get(`/eleves/next-matricule/generate`, { params: { classe_id } })
 
-export const hardDeleteStudent = (matricule) => api.delete(`/eleves/${matricule}/hard`) // Note: backend doesn't have this yet, but we'll see if needed. Actually, let's just use delete for now.
+export const hardDeleteStudent = (matricule) => api.delete(`/eleves/${matricule}/hard`)

@@ -4,7 +4,7 @@ const findAll = async (filters = {}) => {
   let query = `
     SELECT 
       p.idPers, p.idPers AS id, p.nom, p.prenom, p.mobile, p.phone, p.username, p.actif,
-      pa.idParent, 
+      MAX(pa.idParent) as idParent, 
       JSON_ARRAYAGG(
         IF(e.matricule IS NOT NULL, 
           JSON_OBJECT('matricule', e.matricule, 'nom', e.nom, 'prenom', e.prenom),
@@ -21,14 +21,14 @@ const findAll = async (filters = {}) => {
     query += ' AND p.actif = ?';
     params.push(filters.actif);
   }
-  query += ' GROUP BY p.idPers, p.nom, p.prenom, p.mobile, p.phone, p.username, p.actif, pa.idParent ORDER BY p.nom ASC, p.prenom ASC';
+  query += ' GROUP BY p.idPers, p.nom, p.prenom, p.mobile, p.phone, p.username, p.actif ORDER BY p.nom ASC, p.prenom ASC';
   const [rows] = await pool.query(query, params);
   return rows;
 };
 
 const findById = async (idParent) => {
   const [rows] = await pool.query(`
-    SELECT p.*, pa.idParent, 
+    SELECT p.*, MAX(pa.idParent) as idParent, 
       JSON_ARRAYAGG(
         JSON_OBJECT('matricule', e.matricule, 'nom', e.nom, 'prenom', e.prenom)
       ) as enfants
@@ -36,7 +36,7 @@ const findById = async (idParent) => {
     LEFT JOIN Parents pa ON p.idPers = pa.idPers
     LEFT JOIN Eleve e ON pa.matricule = e.matricule
     WHERE (pa.idParent = ? OR p.idPers = ?) AND p.isDeleted = 0
-    GROUP BY p.idPers, pa.idParent
+    GROUP BY p.idPers
     LIMIT 1
   `, [idParent, idParent]);
   return rows[0] || null;

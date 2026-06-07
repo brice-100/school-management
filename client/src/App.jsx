@@ -45,6 +45,7 @@ import ParentAbsences from './pages/parents/ParentAbsences'
 import ParentTimetable from './pages/parents/ParentTimetable'
 import DevoirsParent from './pages/parents/DevoirsParent'
 import ParentMessaging from './pages/parents/ParentMessaging'
+import MesPaiements from './pages/parents/MesPaiements'
 
 
 import { YearProvider } from './context/YearContext'
@@ -115,9 +116,9 @@ export default function App() {
 <Route path="/parent/emploi-du-temps" element={<AP  c={<ParentTimetable />} />} />
 <Route path="/parent/devoirs"      element={<AP  c={<DevoirsParent />} />} />
 <Route path="/parent/messagerie"   element={<AP  c={<ParentMessaging />} />} />
+<Route path="/mes-paiements"       element={<AP  c={<MesPaiements />} />} />
 
           {/* Redirections */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/unauthorized" element={
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
               <div className="card p-10 text-center max-w-sm">

@@ -122,17 +122,19 @@ const validerJustificatif = asyncHandler(async (req, res) => {
     WHERE ID = ?
   `, [idAdmin, idJustif]);
 
-  // 2. Mettre à jour le statut du rapport associé à 'Validé'
+  // 2. Récupérer l'idRapport lié à ce justificatif
   const [justifRow] = await pool.query('SELECT idRapport FROM justificatifs WHERE ID = ?', [idJustif]);
   if (justifRow[0]) {
+    // 3. Remettre les points à 0 ET passer le statut à 'Annulé'
+    //    (absence justifiée = aucun malus de points)
     await pool.query(`
       UPDATE rapport
-      SET status = 'Validé'
+      SET status = 'Annulé', points = 0
       WHERE idRap = ?
     `, [justifRow[0].idRapport]);
   }
 
-  return res.status(200).json({ message: 'Justificatif validé et statut du rapport mis à jour.' });
+  return res.status(200).json({ message: 'Justificatif validé, points remis à 0.' });
 });
 
 const getDisciplines = asyncHandler(async (req, res) => {

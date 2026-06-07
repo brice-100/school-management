@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
+import { Navigate } from 'react-router-dom'
 import { Check, X, UserX, UserCheck, Trash2, Search } from 'lucide-react'
 import { getUsers, updateStatut, deleteUser } from '../../services/userService'
 import { filterDeleted } from '../../services/deleteConfig'
+import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
+
 
 const STATUT_STYLE = {
   en_attente: { label: 'En attente', cls: 'bg-amber-50 text-amber-700' },
@@ -22,6 +25,13 @@ export default function UserManagement() {
   const [filterStatut, setFilterStatut] = useState('en_attente')
   const [search, setSearch] = useState('')
   const [pendingCount, setPendingCount] = useState(0)
+
+  const { user } = useAuth()
+  const isSuperAdmin = user?.role === 'admin' && user?.typeAdmin === 0;
+
+  if (!isSuperAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const fetchUsers = async () => {
     setLoading(true)

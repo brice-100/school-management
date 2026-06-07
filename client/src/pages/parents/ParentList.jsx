@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Search, Plus, Pencil, Trash2, Users } from 'lucide-react'
 import { getParents, deleteParent, restoreParent, hardDeleteParent } from '../../services/parentService'
+import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 
 export default function ParentList() {
@@ -9,6 +10,9 @@ export default function ParentList() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showArchives, setShowArchives] = useState(false)
+  const { user } = useAuth()
+
+  const isSuperAdmin = user?.role === 'admin' && user?.typeAdmin === 0;
 
   const fetchParents = async () => {
     setLoading(true)
@@ -73,7 +77,7 @@ export default function ParentList() {
           <button onClick={() => setShowArchives(!showArchives)} className="btn-secondary">
             {showArchives ? 'Voir les actifs' : 'Voir les archives'}
           </button>
-          {!showArchives && (
+          {!showArchives && isSuperAdmin && (
             <Link to="/parents/new" className="btn-primary">
               <Plus size={16} /> Ajouter
             </Link>
@@ -106,7 +110,7 @@ export default function ParentList() {
             <p className="text-gray-400 text-sm mb-3">
               {showArchives ? 'Aucun parent archivé.' : 'Aucun parent enregistré.'}
             </p>
-            {!showArchives && (
+            {!showArchives && isSuperAdmin && (
               <Link to="/parents/new" className="btn-primary"><Plus size={15} /> Ajouter</Link>
             )}
           </div>
@@ -150,7 +154,7 @@ export default function ParentList() {
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1">
-                      {showArchives ? (
+                      {showArchives && isSuperAdmin ? (
                         <div className="flex gap-1.5">
                           <button
                             onClick={() => handleRestore(p.idParent || p.id, `${p.prenom} ${p.nom}`)}
@@ -166,15 +170,17 @@ export default function ParentList() {
                             <Trash2 size={15} />
                           </button>
                         </div>
-                      ) : (
+                      ) : (!showArchives) ? (
                         <>
                           <Link to={`/parents/${p.idParent || p.id}/edit`} className="btn-icon"><Pencil size={15} /></Link>
-                          <button onClick={() => handleDelete(p.idParent || p.id, `${p.prenom} ${p.nom}`)}
-                            className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600">
-                            <Trash2 size={15} />
-                          </button>
+                          {isSuperAdmin && (
+                            <button onClick={() => handleDelete(p.idParent || p.id, `${p.prenom} ${p.nom}`)}
+                              className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600">
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </>
-                      )}
+                      ) : null}
                     </div>
                   </td>
                 </tr>

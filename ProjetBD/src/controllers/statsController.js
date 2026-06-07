@@ -190,14 +190,23 @@ const getTeachersRecap = asyncHandler(async (req, res) => {
     SELECT
       p.prenom, p.nom, p.username as email,
       c.libelle as classe_nom,
-      GROUP_CONCAT(DISTINCT co.libelle SEPARATOR ', ') as matieres,
+      GROUP_CONCAT(DISTINCT co.libelle ORDER BY co.libelle SEPARATOR ', ') as matieres,
       COUNT(DISTINCT ev.idEval) as nb_notes,
       COALESCE(ROUND(AVG(ev.note), 2), 0) as moyenne_notes,
       sa.statut as salaire_statut,
       sa.montant as salaire_montant
     FROM Enseignant en
     JOIN Personne p ON en.idPers = p.idPers
-    LEFT JOIN Cours co ON en.idCours = co.idCours
+    LEFT JOIN (
+      SELECT en2.idEnseignant, co2.idCours, co2.libelle, co2.idClasse
+      FROM Enseignant en2
+      JOIN Cours co2 ON co2.idCours = en2.idCours
+      WHERE en2.idCours IS NOT NULL
+      UNION
+      SELECT tm.teacher_id, co3.idCours, co3.libelle, co3.idClasse
+      FROM teacher_matieres tm
+      JOIN Cours co3 ON co3.idCours = tm.matiere_id
+    ) co ON co.idEnseignant = en.idEnseignant
     LEFT JOIN Classe c ON co.idClasse = c.idClasse
     LEFT JOIN Evaluation ev ON ev.idCours = co.idCours AND ev.idPers = en.idPers
     LEFT JOIN Salaires sa ON sa.teacher_id = en.idPers AND sa.mois = ? AND sa.annee = ?

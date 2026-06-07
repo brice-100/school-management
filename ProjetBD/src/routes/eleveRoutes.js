@@ -63,6 +63,15 @@ router.get('/par-cours',
 );
 
 /**
+ * GET /api/eleves/next-matricule
+ * Générer le prochain matricule d'une classe
+ */
+router.get('/next-matricule/generate',
+  allowAny({ admins: [0, 1, 2, 3], personnes: [1, 2, 3] }),
+  eleveController.getNextMatricule
+);
+
+/**
  * GET /api/eleves/:matricule
  * Détail d'un élève
  */
@@ -130,7 +139,7 @@ router.patch('/:matricule/statut',
  * Suppression définitive — réservé root et admin uniquement
  */
 router.delete('/:matricule',
-  allowAdmin(0, 1),
+  allowAdmin(0),
   [param('matricule').notEmpty().withMessage('Matricule requis')],
   validate,
   eleveController.remove
@@ -141,7 +150,7 @@ router.delete('/:matricule',
  * Suppression définitive — réservé root et admin uniquement
  */
 router.delete('/:matricule/hard',
-  allowAdmin(0, 1),
+  allowAdmin(0),
   [param('matricule').notEmpty().withMessage('Matricule requis')],
   validate,
   eleveController.hardRemove
@@ -152,7 +161,7 @@ router.delete('/:matricule/hard',
  * Restaure un élève archivé — réservé admin
  */
 router.patch('/:matricule/restaurer',
-  allowAdmin(0, 1),
+  allowAdmin(0),
   [param('matricule').notEmpty().withMessage('Matricule requis')],
   validate,
   eleveController.restore

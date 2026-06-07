@@ -23,11 +23,20 @@ const findAll = async (filters = {}) => {
 
 const findMesCours = async (idPers) => {
   const [rows] = await pool.query(`
-    SELECT c.*, cl.libelle as classe_nom
+    SELECT DISTINCT c.*, cl.libelle AS classe_nom
     FROM Cours c
-    JOIN Enseignant e ON c.idCours = e.idCours
+    JOIN Enseignant e ON e.idPers = ?
     LEFT JOIN Classe cl ON c.idClasse = cl.idClasse
-    WHERE e.idPers = ? AND c.actif = 1
+    WHERE c.actif = 1
+      AND (
+        c.idCours = e.idCours
+        OR c.idCours IN (
+          SELECT tm.matiere_id
+          FROM teacher_matieres tm
+          WHERE tm.teacher_id = e.idEnseignant
+        )
+      )
+    ORDER BY c.libelle ASC
   `, [idPers]);
   return rows;
 };

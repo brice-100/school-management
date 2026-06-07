@@ -3,12 +3,15 @@ import api from './api'
 // ── Paiements ─────────────────────────────────────────────────────
 export const getPaiements        = (params)    => api.get('/paiements', { params })
 export const getPaiementsParent  = (params)    => api.get('/paiements/mon-compte', { params })
-export const getPaiementSummary = (params)    => api.get('/paiements/summary', { params })
+export const getPaiementSummary  = (params)    => api.get('/paiements/summary', { params })
+export const getDetailsEnfants   = (params)    => api.get('/paiements/details-enfants', { params })
+export const getSituationFinanciere = (params) => api.get('/paiements/situation-financiere', { params })
 export const getPaiementsRecents = (params)    => api.get('/paiements/recents', { params })
 export const getPaiement         = (idPaie)    => api.get(`/paiements/${idPaie}`)
 export const createPaiement      = (data)      => api.post('/paiements', data)
 export const initierPaiement     = (data)      => api.post('/paiements/initier', data)
 export const validerPaiement     = (idPaie, data) => api.patch(`/paiements/${idPaie}/valider`, data)
+export const deletePaiement      = (idPaie)       => api.delete(`/paiements/${idPaie}`)
 
 // ── Scolarité ─────────────────────────────────────────────────────
 export const getScolarite        = (params)    => api.get('/scolarite', { params })

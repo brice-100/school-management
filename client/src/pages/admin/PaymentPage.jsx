@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Search, Plus, X, CheckCircle, Clock, CreditCard,
   Eye, RefreshCw, AlertCircle,
@@ -14,9 +14,11 @@ import {
   createPaiement,
   initierPaiement,
   validerPaiement,
+  deletePaiement,
   getModesPaiement,
   getAnneesAcademiques,
   getTranches,
+  getSituationFinanciere,
 } from '../../services/paymentService'
 import { getStudents, toggleActif } from '../../services/studentService'
 import { getMesEnfants } from '../../services/parentService'
@@ -227,8 +229,8 @@ function InitierPaiementForm({ modes, annees, onSuccess, onCancel }) {
   const [instructions, setInstructions] = useState(null)
   
   const [form, setForm] = useState({ 
-    matricule: '', idMode: '', idAca: '', idTranche: '', 
-    type_paiement: 'cash', phone_paiement: '', montant: '' 
+    matricule: '', idMode: '1', idAca: '', idTranche: '', 
+    type_paiement: 'mobile_money', phone_paiement: '', montant: '' 
   })
 
   useEffect(() => {
@@ -327,12 +329,12 @@ function InitierPaiementForm({ modes, annees, onSuccess, onCancel }) {
           </select>
         </div>
         <div>
-          <label className="form-label">Type de règlement *</label>
+          <label className="form-label">Méthode de transfert *</label>
           <select value={form.type_paiement} onChange={e => set('type_paiement', e.target.value)}
             className="select-field">
-            <option value="cash">Paiement Cash (Espèces)</option>
             <option value="mobile_money">MTN Mobile Money</option>
             <option value="orange_money">Orange Money</option>
+            <option value="cash">Paiement Cash (Espèces)</option>
           </select>
         </div>
         <div>
@@ -389,13 +391,33 @@ export default function PaymentPage() {
   const [paiements,    setPaiements]    = useState([])
   const [recents,      setRecents]      = useState([])
   const [summary,      setSummary]      = useState(null)
+  const [situationData,setSituationData]= useState([])
   const [modes,        setModes]        = useState([])
   const [annees,       setAnnees]       = useState([])
   const [loading,      setLoading]      = useState(true)
   const [showForm,     setShowForm]     = useState(false)
+  const [activeTab,    setActiveTab]    = useState('historique') // 'historique' | 'situation'
   const [detailId,     setDetailId]     = useState(null)
   const [validModal,   setValidModal]   = useState(null)  // { idPaie, nom }
   const [ficheMatricule, setFicheMatricule] = useState(null)
+
+  const searchInputRef = useRef(null)
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.key === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        return
+      }
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        searchInputRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const [filters, setFilters] = useState({
     matricule: '', statut: '', idAca: selectedYear?.idAnnee || '',
@@ -433,12 +455,14 @@ export default function PaymentPage() {
         setPaiements(listData.paiements || listData.data || [])
         setSummary(summaryData.data)
       } else {
-        const [list, rec] = await Promise.all([
+        const [list, rec, sit] = await Promise.all([
           getPaiements({ ...filters }),
           getPaiementsRecents({ limit: 5 }),
+          getSituationFinanciere({ ...filters })
         ])
         setPaiements(list.data.paiements || list.data.data || [])
         setRecents(rec.data.paiements || rec.data.data || [])
+        setSituationData(sit.data.data || sit.data || [])
       }
     } catch { toast.error('Erreur chargement paiements.') }
     finally { setLoading(false) }
@@ -478,6 +502,15 @@ export default function PaymentPage() {
     } catch { toast.error("Erreur lors de l'activation.") }
   }
 
+  const handleDeletePaiement = async (idPaie) => {
+    if (!window.confirm('Voulez-vous vraiment supprimer ce paiement ? Cette action est irréversible.')) return
+    try {
+      await deletePaiement(idPaie)
+      toast.success('Paiement supprimé !')
+      fetchPaiements()
+    } catch { toast.error('Erreur lors de la suppression.') }
+  }
+
   // ── Statistiques locales ──────────────────────────────────────
   const totalMontant  = paiements.reduce((s, p) => s + parseFloat(p.montant || 0), 0)
   const totalValides  = paiements.filter(p => p.valide === 1).length
@@ -490,6 +523,17 @@ export default function PaymentPage() {
         `${p.nomEleve} ${p.matricule}`.toLowerCase().includes(search.toLowerCase())
       )
     : paiements
+
+  const situationFiltres = search
+    ? situationData.filter(s =>
+        `${s.nomEleve} ${s.matricule}`.toLowerCase().includes(search.toLowerCase())
+      )
+    : situationData
+
+  const groupBy = (array, key) => array.reduce((acc, item) => {
+    (acc[item[key]] = acc[item[key]] || []).push(item);
+    return acc;
+  }, {})
 
   return (
     <div className="page-container">
@@ -563,11 +607,19 @@ export default function PaymentPage() {
 
       {/* ── Filtres ──────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 mb-5">
-        <div className="relative flex-1 min-w-48">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input placeholder="Rechercher élève, matricule..."
+        <div className="relative flex-1 min-w-48 group">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-500 transition-colors" />
+          <input 
+            ref={searchInputRef}
+            placeholder="Rechercher élève, matricule... (Commencez à taper)"
             value={search} onChange={e => setSearch(e.target.value)}
-            className="input-field pl-9" />
+            className="input-field pl-9 pr-16" 
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 pointer-events-none">
+             <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-semibold text-gray-400 bg-gray-50 border border-gray-200 rounded">Ctrl</kbd>
+             <span className="text-gray-300 text-xs">+</span>
+             <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-semibold text-gray-400 bg-gray-50 border border-gray-200 rounded">K</kbd>
+          </div>
         </div>
         {isAdmin && (
           <>
@@ -591,7 +643,7 @@ export default function PaymentPage() {
       </div>
 
       {/* ── Récents (admin — sidebar rapide) ─────────────────── */}
-      {isAdmin && recents.length > 0 && (
+      {isAdmin && recents.length > 0 && activeTab === 'historique' && (
         <div className="card p-4 mb-5">
           <div className="flex items-center gap-2 mb-3">
             <ArrowUpRight size={14} className="text-primary-500" />
@@ -614,7 +666,78 @@ export default function PaymentPage() {
         </div>
       )}
 
+      {/* ── Tabs (admin) ──────────────────────────────────────────── */}
+      {isAdmin && (
+        <div className="flex gap-2 mb-5 border-b border-gray-100">
+          <button 
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'historique' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setActiveTab('historique')}
+          >
+            Historique des paiements
+          </button>
+          <button 
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'situation' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setActiveTab('situation')}
+          >
+            Situation par Élève
+          </button>
+        </div>
+      )}
+
+      {/* ── Situation par Élève (Admin) ────────────────────────── */}
+      {isAdmin && activeTab === 'situation' && (
+        <div className="space-y-6">
+          {Object.entries(groupBy(situationFiltres, 'classe')).map(([classe, eleves]) => (
+            <div key={classe} className="card overflow-hidden">
+              <div className="bg-gray-50 px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+                <h3 className="font-semibold text-gray-900">{classe && classe !== 'undefined' ? classe : 'Sans classe'}</h3>
+                <span className="badge bg-white shadow-sm border">{eleves.length} élève(s)</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-left font-medium text-gray-500 bg-white">
+                      <th className="px-5 py-3 whitespace-nowrap">Élève</th>
+                      <th className="px-5 py-3 text-right whitespace-nowrap">Tranches payées</th>
+                      <th className="px-5 py-3 text-right whitespace-nowrap">Total à payer</th>
+                      <th className="px-5 py-3 text-right whitespace-nowrap">Reste à payer</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 bg-white">
+                    {eleves.map(e => (
+                      <tr key={e.matricule} className="hover:bg-gray-50/50">
+                        <td className="px-5 py-3 whitespace-nowrap">
+                          <p className="font-medium text-gray-900">{e.nomEleve}</p>
+                          <p className="text-gray-400 text-xs">Mat. {e.matricule}</p>
+                        </td>
+                        <td className="px-5 py-3 text-right text-gray-600">
+                          {e.tranches_payees || '—'}
+                        </td>
+                        <td className="px-5 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
+                          {fmt(e.total_annuel_du)}
+                        </td>
+                        <td className="px-5 py-3 text-right whitespace-nowrap">
+                           {e.reste_a_payer > 0 ? (
+                             <span className="font-semibold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">{fmt(e.reste_a_payer)}</span>
+                           ) : (
+                             <span className="font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">Soldé</span>
+                           )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+          {!loading && situationFiltres.length === 0 && (
+             <p className="text-center text-gray-500 py-10">Aucun élève trouvé.</p>
+          )}
+        </div>
+      )}
+
       {/* ── Table ────────────────────────────────────────────── */}
+      {(!isAdmin || activeTab === 'historique') && (
       <div className="card overflow-hidden">
         {loading ? (
           <div className="p-6 space-y-3">
@@ -717,6 +840,14 @@ export default function PaymentPage() {
                             🎓 Activer élève
                           </button>
                         )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDeletePaiement(p.idPaie)}
+                            className="btn-icon bg-red-50 text-red-600 hover:bg-red-100 ml-1"
+                            title="Supprimer le paiement">
+                            <X size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -726,6 +857,7 @@ export default function PaymentPage() {
           </table>
         )}
       </div>
+      )}
 
       {/* Modal de Validation Amélioré */}
       {validModal && (

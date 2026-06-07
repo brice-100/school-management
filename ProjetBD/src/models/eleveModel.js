@@ -245,4 +245,39 @@ const hardRemove = async (matricule) => {
   }
 };
 
-module.exports = { findAll, findByMatricule, findByClasse, create, update, setActif, remove, restore, hardRemove };
+/**
+ * Génère le prochain matricule d'une classe spécifique
+ */
+const generateNextMatricule = async (idClasse) => {
+  const year = new Date().getFullYear();
+  let prefix = 'AL';
+  
+  if (idClasse) {
+    const [classes] = await pool.query('SELECT libelle FROM Classe WHERE idClasse = ? LIMIT 1', [idClasse]);
+    if (classes.length > 0) {
+      const nomClasse = classes[0].libelle;
+      // Nettoyer et prendre le diminutif (ex: "Petite section" -> "PS", "CP" -> "CP")
+      const mots = nomClasse.trim().split(/\s+/);
+      if (mots.length > 1) {
+        prefix = mots.map(m => m[0]).join('').toUpperCase();
+      } else {
+        prefix = nomClasse.substring(0, 3).toUpperCase();
+      }
+    }
+  }
+
+  const basePrefix = `${prefix}-${year}-`;
+  const [last] = await pool.query('SELECT matricule FROM Eleve WHERE matricule LIKE ? ORDER BY created_at DESC LIMIT 1', [`${basePrefix}%`]);
+  
+  let nextNum = 1;
+  if (last.length > 0) {
+    const lastMat = last[0].matricule;
+    const parts = lastMat.split('-');
+    const lastNum = parseInt(parts[parts.length - 1]);
+    if (!isNaN(lastNum)) nextNum = lastNum + 1;
+  }
+  
+  return `${basePrefix}${nextNum.toString().padStart(3, '0')}`;
+};
+
+module.exports = { findAll, findByMatricule, findByClasse, create, update, setActif, remove, restore, hardRemove, generateNextMatricule };

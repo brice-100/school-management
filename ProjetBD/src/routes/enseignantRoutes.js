@@ -67,7 +67,7 @@ router.get('/:idEnseignant',
  * Réservé admin + directeur
  */
 router.post('/',
-  allowAdmin(0, 1, 3),
+  allowAdmin(0),
   handleUpload(uploadPhoto),
   createValidation,
   validate,
@@ -94,7 +94,7 @@ router.put('/:idEnseignant',
  * Activer / désactiver un enseignant
  */
 router.patch('/:idEnseignant/statut',
-  allowAdmin(0, 1, 3),
+  allowAdmin(0),
   [
     param('idEnseignant').isInt({ min: 1 }).withMessage('idEnseignant invalide'),
     body('actif').isIn([0, 1]).withMessage('actif doit être 0 ou 1'),
@@ -108,7 +108,7 @@ router.patch('/:idEnseignant/statut',
  * Changer le mot de passe d'un enseignant
  */
 router.patch('/:idEnseignant/password',
-  allowAdmin(0, 1, 3),
+  allowAdmin(0),
   [
     param('idEnseignant').isInt({ min: 1 }).withMessage('idEnseignant invalide'),
     body('newPassword')
@@ -136,7 +136,7 @@ router.get('/:idEnseignant/eleves',
  * Suppression définitive — root/admin uniquement
  */
 router.delete('/:idEnseignant',
-  allowAdmin(0, 1),
+  allowAdmin(0),
   [param('idEnseignant').isInt({ min: 1 }).withMessage('idEnseignant invalide')],
   validate,
   enseignantController.remove
@@ -146,7 +146,7 @@ router.delete('/:idEnseignant',
  * PATCH /api/enseignants/:idEnseignant/restaurer
  */
 router.patch('/:idEnseignant/restaurer',
-  allowAdmin(0, 1),
+  allowAdmin(0),
   [param('idEnseignant').isInt({ min: 1 }).withMessage('idEnseignant invalide')],
   validate,
   enseignantController.restore

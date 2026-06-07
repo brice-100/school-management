@@ -42,11 +42,12 @@ const NAV_BY_ROLE = {
   parent: [
     { to: '/dashboard',      icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/mon-enfant',     icon: Users,           label: 'Mes enfants' },
+    { to: '/mes-paiements',  icon: CreditCard,      label: 'Mes paiements' },
     { to: '/parent/absences', icon: AlertTriangle, label: 'Suivi Absences' },
     { to: '/parent/emploi-du-temps', icon: Calendar, label: 'Emploi du Temps' },
     { to: '/parent/devoirs',  icon: Book,            label: 'Cahier de Textes' },
     { to: '/bulletins',      icon: FileText,        label: 'Bulletins' },
-    { to: '/paiements',      icon: CreditCard,      label: 'Mes paiements' },
+    { to: '/paiements',      icon: CreditCard,      label: 'Historique paiements' },
     { to: '/parent/messagerie', icon: MessageSquare, label: 'Messagerie Enseignants' },
   ],
 }
@@ -59,7 +60,33 @@ export default function Sidebar({ mobile, onClose }) {
   const { annees, selectedYear, changeYear, loading } = useYear()
   const navigate         = useNavigate()
   const role             = user?.role || 'parent'
-  const items            = NAV_BY_ROLE[role] || NAV_BY_ROLE.parent
+  const isSuperAdmin     = role === 'admin' && user?.typeAdmin === 0;
+
+  let items = NAV_BY_ROLE[role] || NAV_BY_ROLE.parent
+  if (role === 'admin') {
+    if (isSuperAdmin) {
+      // Super Admin gère uniquement le système et les comptes
+      const superAdminHiddenRoutes = [
+        '/paiements', '/grades', '/planning', '/bulletins', 
+        '/evaluations', '/salaries', '/bibliotheque', '/rapports', '/messagerie', '/classes'
+      ];
+      items = items.filter(item => !superAdminHiddenRoutes.includes(item.to));
+    } else {
+      // Le Directeur n'a pas accès à la gestion des comptes admins
+      items = items.filter(item => item.to !== '/users');
+    }
+  }
+
+  const getRoleLabel = () => {
+    if (isSuperAdmin) return 'Super Administrateur';
+    if (role === 'admin') return 'Directeur';
+    return ROLE_LABEL[role] || 'Parent';
+  }
+
+  const getRoleDot = () => {
+    if (isSuperAdmin) return 'bg-purple-500';
+    return ROLE_DOT[role] || 'bg-blue-400';
+  }
   
   return (
     <aside className={`
@@ -110,8 +137,8 @@ export default function Sidebar({ mobile, onClose }) {
       {/* Badge rôle */}
       <div className="px-4 py-2 border-b border-primary-400/20">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${ROLE_DOT[role]}`} />
-          <span className="text-primary-200 text-xs">{ROLE_LABEL[role]}</span>
+          <div className={`w-2 h-2 rounded-full ${getRoleDot()}`} />
+          <span className="text-primary-200 text-xs">{getRoleLabel()}</span>
         </div>
       </div>
 
@@ -149,7 +176,7 @@ export default function Sidebar({ mobile, onClose }) {
             <p className="text-white text-xs font-medium truncate">
               {user?.prenom} {user?.nom}
             </p>
-            <p className="text-primary-300 text-xs">{ROLE_LABEL[role]}</p>
+            <p className="text-primary-300 text-xs">{getRoleLabel()}</p>
           </div>
         </div>
         <button onClick={() => { logout(); navigate('/login') }}

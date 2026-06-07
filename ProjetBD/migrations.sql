@@ -48,7 +48,20 @@ UPDATE AnneeAcademique SET est_active = 1
 WHERE idAnnee = (SELECT MAX(idAnnee) FROM (SELECT idAnnee FROM AnneeAcademique) AS sub)
   AND NOT EXISTS (SELECT 1 FROM (SELECT COUNT(*) as cnt FROM AnneeAcademique WHERE est_active = 1) AS chk WHERE cnt > 0);
 
--- 12. Conversion Matricule INT -> VARCHAR(50) (Alphanumérique)
+-- 12. Table de liaison enseignant ↔ matières (multi-matières)
+CREATE TABLE IF NOT EXISTS teacher_matieres (
+  teacher_id INT UNSIGNED NOT NULL,
+  matiere_id INT UNSIGNED NOT NULL,
+  PRIMARY KEY (teacher_id, matiere_id),
+  CONSTRAINT fk_tm_teacher FOREIGN KEY (teacher_id) REFERENCES Enseignant(idEnseignant) ON DELETE CASCADE,
+  CONSTRAINT fk_tm_matiere FOREIGN KEY (matiere_id) REFERENCES Cours(idCours) ON DELETE CASCADE
+);
+
+-- Peupler depuis la matière principale existante (Enseignant.idCours)
+INSERT IGNORE INTO teacher_matieres (teacher_id, matiere_id)
+SELECT idEnseignant, idCours FROM Enseignant WHERE idCours IS NOT NULL;
+
+-- 13. Conversion Matricule INT -> VARCHAR(50) (Alphanumérique)
 SET FOREIGN_KEY_CHECKS = 0;
 
 ALTER TABLE Eleve MODIFY matricule VARCHAR(50) NOT NULL;

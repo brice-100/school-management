@@ -15,8 +15,13 @@ const findAll = async (filters = {}) => {
       COALESCE(
         (SELECT cl.libelle FROM Titulaire ti JOIN Salle sa ON ti.idSalle = sa.idSalle JOIN Classe cl ON sa.idClasse = cl.idClasse WHERE ti.idPers = p.idPers LIMIT 1),
         (SELECT cl.libelle FROM Classe cl WHERE cl.idClasse = c.idClasse LIMIT 1)
-      ) AS classe_nom
-
+      ) AS classe_nom,
+      (
+        SELECT JSON_ARRAYAGG(JSON_OBJECT('idCours', co.idCours, 'libelle', co.libelle))
+        FROM teacher_matieres tm
+        JOIN Cours co ON co.idCours = tm.matiere_id
+        WHERE tm.teacher_id = e.idEnseignant
+      ) AS matieres_json
     FROM Personne p
     LEFT JOIN Enseignant e ON p.idPers = e.idPers
     LEFT JOIN Cours c ON e.idCours = c.idCours
@@ -38,7 +43,11 @@ const findAll = async (filters = {}) => {
   query += ' ORDER BY p.nom ASC, p.prenom ASC';
 
   const [rows] = await pool.query(query, params);
-  return rows;
+  // Parse matieres_json from string to array
+  return rows.map(r => ({
+    ...r,
+    matieres: r.matieres_json ? (typeof r.matieres_json === 'string' ? JSON.parse(r.matieres_json) : r.matieres_json) : []
+  }));
 };
 
 /**
@@ -56,14 +65,25 @@ const findById = async (idEnseignant) => {
        COALESCE(
          (SELECT cl.libelle FROM Titulaire ti JOIN Salle sa ON ti.idSalle = sa.idSalle JOIN Classe cl ON sa.idClasse = cl.idClasse WHERE ti.idPers = p.idPers LIMIT 1),
          (SELECT cl.libelle FROM Classe cl WHERE cl.idClasse = c.idClasse LIMIT 1)
-       ) AS classe_nom
+       ) AS classe_nom,
+       (
+         SELECT JSON_ARRAYAGG(JSON_OBJECT('idCours', co.idCours, 'libelle', co.libelle))
+         FROM teacher_matieres tm
+         JOIN Cours co ON co.idCours = tm.matiere_id
+         WHERE tm.teacher_id = e.idEnseignant
+       ) AS matieres_json
      FROM Personne p
      LEFT JOIN Enseignant e ON p.idPers = e.idPers
      LEFT JOIN Cours c ON e.idCours = c.idCours
      WHERE (e.idEnseignant = ? OR p.idPers = ?) AND p.typePersonne = 1 AND p.isDeleted = 0 LIMIT 1`,
     [idEnseignant, idEnseignant]
   );
-  return rows[0] || null;
+  if (!rows[0]) return null;
+  const row = rows[0];
+  row.matieres = row.matieres_json
+    ? (typeof row.matieres_json === 'string' ? JSON.parse(row.matieres_json) : row.matieres_json)
+    : [];
+  return row;
 };
 
 /**
@@ -129,13 +149,33 @@ const create = async (personneData, enseignantData) => {
     );
     const idPers = p.insertId;
 
+    // Premier idCours (pour compatibilité colonne Enseignant.idCours)
+    const firstCours = Array.isArray(enseignantData.idCours)
+      ? (enseignantData.idCours[0] || null)
+      : (enseignantData.idCours || null);
+
     // 2. Insérer dans Enseignant
     const [e] = await conn.query(
       `INSERT INTO Enseignant (idPers, idCours, Actif, idAdmin, created_at)
        VALUES (?, ?, 1, ?, NOW())`,
-      [idPers, enseignantData.idCours, enseignantData.idAdmin]
+      [idPers, firstCours, enseignantData.idAdmin]
     );
     const idEnseignant = e.insertId;
+
+    // 3. Insérer dans teacher_matieres (multi-matières)
+    const coursIds = Array.isArray(enseignantData.idCours)
+      ? enseignantData.idCours
+      : (enseignantData.idCours ? [enseignantData.idCours] : []);
+
+    for (const cId of coursIds) {
+      const numId = parseInt(cId);
+      if (numId) {
+        await conn.query(
+          'INSERT IGNORE INTO teacher_matieres (teacher_id, matiere_id) VALUES (?, ?)',
+          [idEnseignant, numId]
+        );
+      }
+    }
 
     await conn.commit();
     return { idPers, idEnseignant };
@@ -174,12 +214,52 @@ const updatePersonne = async (idPers, data) => {
   return result.affectedRows;
 };
 
+/**
+ * Met à jour les matières d'un enseignant (remplace toutes les entrées existantes).
+ * @param {number} idEnseignant - L'identifiant dans la table Enseignant
+ * @param {number} idPers - L'identifiant dans la table Personne
+ * @param {number[]} coursIds - Tableau d'idCours
+ * @param {number} idAdmin
+ */
+const setMatieres = async (idEnseignant, idPers, coursIds = [], idAdmin = 1) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1. Supprimer les anciennes affectations
+    await conn.query('DELETE FROM teacher_matieres WHERE teacher_id = ?', [idEnseignant]);
+
+    // 2. Insérer les nouvelles
+    for (const cId of coursIds) {
+      const numId = parseInt(cId);
+      if (numId) {
+        await conn.query(
+          'INSERT IGNORE INTO teacher_matieres (teacher_id, matiere_id) VALUES (?, ?)',
+          [idEnseignant, numId]
+        );
+      }
+    }
+
+    // 3. Mettre à jour idCours principal (le premier) dans Enseignant pour la compatibilité
+    const firstCours = coursIds.length > 0 ? (parseInt(coursIds[0]) || null) : null;
+    await conn.query('UPDATE Enseignant SET idCours = ? WHERE idEnseignant = ?', [firstCours, idEnseignant]);
+
+    await conn.commit();
+    return coursIds.length;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
+
 const updateCours = async (idPers, idCours, idAdmin = 1) => {
   // Vérifier si une entrée existe déjà dans Enseignant pour cette Personne
   const [rows] = await pool.query('SELECT idEnseignant FROM Enseignant WHERE idPers = ?', [idPers]);
   
   if (rows.length > 0) {
-    // Mise à jour
+    // Mise à jour du cours principal
     const [result] = await pool.query(
       'UPDATE Enseignant SET idCours = ? WHERE idPers = ?',
       [idCours, idPers]
@@ -267,5 +347,5 @@ const remove = async (idEnseignant, idPers) => {
 
 module.exports = {
   findAll, findById, findByIdPers, isUsernameTaken,
-  create, updatePersonne, updateCours, setActif, remove, restore
+  create, updatePersonne, updateCours, setMatieres, setActif, remove, restore
 };

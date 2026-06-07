@@ -4,7 +4,7 @@ import {
   Calendar, FileText, RefreshCw, AlertCircle
 } from 'lucide-react'
 import { getTeacherStudents } from '../../services/teacherService'
-import { getMatieres } from '../../services/matiereService'
+import { getMesCours } from '../../services/coursService'
 import { getDevoirs, createDevoir, updateDevoir, deleteDevoir } from '../../services/devoirService'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
@@ -49,13 +49,13 @@ export default function TeacherDevoirs() {
     try {
       const [studentsRes, matieresRes, devoirsRes] = await Promise.all([
         getTeacherStudents(user.id),
-        getMatieres(),
+        getMesCours(),
         getDevoirs()
       ])
 
       const classList = studentsRes.data.classes || []
       setClasses(classList)
-      setMatieres(matieresRes.data.data || matieresRes.data.cours || [])
+      setMatieres(matieresRes.data.data || [])
       setDevoirs(devoirsRes.data.data || [])
       
       // Pré-remplir les valeurs par défaut

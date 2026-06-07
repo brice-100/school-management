@@ -297,5 +297,13 @@ const hardRemove = asyncHandler(async (req, res) => {
   await eleveModel.hardRemove(matricule);
   return res.status(200).json({ message: 'Élève supprimé définitivement', matricule });
 });
+const getNextMatricule = asyncHandler(async (req, res) => {
+  const classe_id = parseInt(req.query.classe_id);
+  if (!classe_id) {
+    return res.status(400).json({ message: 'classe_id est requis' });
+  }
+  const matricule = await eleveModel.generateNextMatricule(classe_id);
+  return res.status(200).json({ data: matricule });
+});
 
-module.exports = { getAll, getOne, getByClasse, getByCours, create, update, updateStatut, remove, restore, getFiche, hardRemove };
+module.exports = { getAll, getOne, getByClasse, getByCours, create, update, updateStatut, remove, restore, getFiche, hardRemove, getNextMatricule };

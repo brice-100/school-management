@@ -44,7 +44,13 @@ export default function EnseignantFicheModal({ idEnseignant, onClose }) {
             </div>
             <div>
               <h3 className="font-display font-bold text-gray-900 text-lg uppercase">{t.prenom} {t.nom}</h3>
-              <p className="text-xs text-blue-600 font-medium">ID : {t.alanyaID || t.idEnseignant} • Spécialité : {t.matiere_nom || 'Généraliste'}</p>
+              <p className="text-xs text-blue-600 font-medium">
+                ID : {t.alanyaID || t.idEnseignant} • 
+                {t.matieres && t.matieres.length > 0
+                  ? t.matieres.map(m => m.libelle).join(', ')
+                  : (t.matiere_nom || 'Généraliste')
+                }
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="btn-icon bg-white shadow-sm"><X size={18} /></button>
@@ -120,19 +126,36 @@ export default function EnseignantFicheModal({ idEnseignant, onClose }) {
                 <p className="text-xs text-gray-400 uppercase font-bold mb-2">Classe Titulaire (Direction)</p>
                 <p className="text-lg font-semibold text-gray-900">{t.classe_nom || 'Non assigné'}</p>
               </div>
+
               <div className="card p-4 bg-white border-l-4 border-blue-400">
-                <p className="text-xs text-gray-400 uppercase font-bold mb-2">Cours assignés</p>
-                <p className="text-sm font-medium text-gray-900 leading-relaxed">
-                  {t.matiere_nom || 'Aucun cours assigné'}
+                <p className="text-xs text-gray-400 uppercase font-bold mb-3">Matières enseignées</p>
+                {(() => {
+                  const list = t.matieres && t.matieres.length > 0
+                    ? t.matieres
+                    : t.matiere_nom
+                      ? [{ libelle: t.matiere_nom }]
+                      : []
+                  if (list.length === 0) {
+                    return <p className="text-sm text-gray-400 italic">Aucune matière assignée</p>
+                  }
+                  return (
+                    <div className="flex flex-wrap gap-2">
+                      {list.map((m, i) => (
+                        <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5
+                          bg-blue-50 text-blue-700 rounded-full text-sm font-medium border border-blue-100">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+                          {m.libelle || m.nom}
+                        </span>
+                      ))}
+                    </div>
+                  )
+                })()}
+                <p className="text-[10px] text-gray-400 mt-3 italic">
+                  {t.matieres && t.matieres.length > 1
+                    ? `Cet enseignant intervient sur ${t.matieres.length} matières.`
+                    : 'Les classes d’intervention sont déduites des cours assignés.'}
                 </p>
               </div>
-              <div className="card p-4 bg-white border-l-4 border-amber-400">
-                <p className="text-xs text-gray-400 uppercase font-bold mb-2">Matière Principale</p>
-                <p className="text-lg font-semibold text-gray-900">{t.matiere_nom || 'Non assigné'}</p>
-              </div>
-              <p className="text-[10px] text-gray-400 italic text-center mt-6">
-                Les classes d'intervention sont déduites des cours assignés à cet enseignant.
-              </p>
             </div>
           )}
 

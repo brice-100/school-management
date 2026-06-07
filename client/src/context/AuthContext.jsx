@@ -15,7 +15,7 @@ const AuthContext = createContext(null);
     const token = localStorage.getItem('token');
     if (token) {
       getMe()
-        .then(({ user }) => setUser(user))
+        .then((res) => setUser(res.data.user))
         .catch(() => {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
@@ -23,7 +23,6 @@ const AuthContext = createContext(null);
         })
         .finally(() => setLoading(false));
     }
-    // Plus besoin de "else", car si pas de token, loading est déjà false !
   }, []);
 
   // ... reste du code (login, logout)

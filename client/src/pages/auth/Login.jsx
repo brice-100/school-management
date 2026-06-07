@@ -8,7 +8,7 @@ const MAX_ATTEMPTS   = 3
 const LOCKOUT_MS     = 30 * 60 * 1000   // 30 minutes
 
 export default function Login() {
-  const [form,       setForm]       = useState({ username: '', password: '', userType: 'admin' })
+  const [form,       setForm]       = useState({ username: '', password: '', userType: 'super_admin' })
   const [showPwd,    setShowPwd]    = useState(false)
   const [loading,    setLoading]    = useState(false)
   const [error,      setError]      = useState('')
@@ -42,9 +42,12 @@ export default function Login() {
 
     setLoading(true)
     try {
-      // L'API attend username (pas email) — conforme à la table Admin/Personne
-      // form.userType contient le type d'utilisateur sélectionné ('admin', 'teacher', 'parent')
-      const user = await login(form.username, form.password, form.userType)
+      let apiUserType = form.userType;
+      if (apiUserType === 'super_admin' || apiUserType === 'directeur') {
+        apiUserType = 'admin';
+      }
+      
+      const user = await login(form.username, form.password, apiUserType)
       // Réinitialiser les tentatives après succès
       setAttempts(0)
       setLockedUntil(null)
@@ -101,7 +104,8 @@ export default function Login() {
           </p>
           <div className="space-y-2.5">
             {[
-              { dot: 'bg-yellow-400', text: 'Administrateur — gestion complète' },
+              { dot: 'bg-purple-500', text: 'Super Admin — gestion des comptes' },
+              { dot: 'bg-yellow-400', text: 'Directeur — gestion pédagogique' },
               { dot: 'bg-emerald-400', text: 'Enseignant — notes & planning'     },
               { dot: 'bg-blue-400',   text: 'Parent — suivi de votre enfant'     },
             ].map(({ dot, text }) => (
@@ -236,7 +240,7 @@ export default function Login() {
                     </button>
                   </div>
                 </div>
-                          <div>
+<div>
   <label className="form-label">Type d'utilisateur</label>
   <select 
     name="userType" 
@@ -244,7 +248,8 @@ export default function Login() {
     onChange={handleChange} 
     className="input-field"
   >
-    <option value="admin">Administrateur</option>
+    <option value="super_admin">Super Administrateur</option>
+    <option value="directeur">Directeur</option>
     <option value="teacher">Enseignant</option>
     <option value="parent">Parent</option>
   </select>

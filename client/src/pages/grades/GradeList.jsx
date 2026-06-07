@@ -32,6 +32,7 @@ export default function GradeList() {
   const [editingId, setEditingId] = useState(null)
   const [formLoading, setFormLoading] = useState(false)
   const [showArchives, setShowArchives] = useState(false)
+  const [selectedClass, setSelectedClass] = useState(null)
 
   const [filters, setFilters] = useState({
     classe_id: '', matiere_id: '', trimestre: '1',
@@ -81,13 +82,14 @@ export default function GradeList() {
 
   // ── Charger les notes ──────────────────────────────────────────
   const fetchGrades = async () => {
-    if (!selectedYear?.libelle) return
     setLoading(true)
     try {
-      const params = { 
-        ...filters, 
-        annee_scolaire: selectedYear.libelle,
-        archives: showArchives ? 1 : 0
+      const params = {
+        ...filters,
+        // Envoyer idAnnee (entier) — le backend le résout aussi depuis annee_scolaire si besoin
+        idAnnee: selectedYear?.idAnnee || '',
+        annee_scolaire: selectedYear?.libelle || '',
+        archives: showArchives ? 1 : 0,
       }
       const { data } = await getGrades(params)
       setGrades(data.data || [])
@@ -99,7 +101,36 @@ export default function GradeList() {
     }
   }
 
-  useEffect(() => { fetchGrades() }, [filters, showArchives])
+  // Recharger quand les filtres, l'année ou le mode archives changent
+  useEffect(() => { fetchGrades() }, [filters, showArchives, selectedYear])
+
+  // Grouper les notes par classe
+  const groupedGrades = grades.reduce((acc, g) => {
+    const cName = g.classe_nom || 'Non assigné';
+    if (!acc[cName]) acc[cName] = [];
+    acc[cName].push(g);
+    return acc;
+  }, {});
+
+  const classOrder = [
+    'Toute petite section', 'Petite section', 'Moyenne section', 'Grande section',
+    'SIL', 'CP', 'CE1', 'CE2', 'CM1', 'CM2',
+    '6eme', '5eme', '4eme', '3eme', '2nde', '1ere', 'Terminale'
+  ];
+
+  const getSortIndex = (className) => {
+    if (!className) return 999;
+    const name = className.toLowerCase().trim();
+    const index = classOrder.findIndex(c => name.includes(c.toLowerCase()));
+    return index === -1 ? 999 : index;
+  };
+
+  const sortedClassNames = Object.keys(groupedGrades).sort((a, b) => {
+    const idxA = getSortIndex(a);
+    const idxB = getSortIndex(b);
+    if (idxA !== idxB) return idxA - idxB;
+    return a.localeCompare(b);
+  });
 
   // ── Saisir une note ────────────────────────────────────────────
   const handleCreate = async (e) => {
@@ -118,7 +149,8 @@ export default function GradeList() {
         valeur:        v,
         trimestre:     parseInt(form.trimestre, 10),
         commentaire:   form.commentaire || null,
-        annee_scolaire: selectedYear?.libelle,
+        idAnnee:       selectedYear?.idAnnee || null,
+        annee_scolaire: selectedYear?.libelle || null,
         idEpreuve:     form.idEpreuve ? parseInt(form.idEpreuve, 10) : undefined,
         idSession:     form.idSession ? parseInt(form.idSession, 10) : undefined,
       }
@@ -232,12 +264,6 @@ export default function GradeList() {
       {/* Filtres admin */}
       {isAdmin && (
         <div className="flex flex-wrap gap-3 mb-5">
-          <select value={filters.classe_id}
-            onChange={e => setFilters(f => ({ ...f, classe_id: e.target.value }))}
-            className="select-field w-44">
-            <option value="">Toutes les classes</option>
-            {classes.map(c => <option key={c.idClasse} value={c.idClasse}>{c.libelle}</option>)}
-          </select>
           <select value={filters.matiere_id}
             onChange={e => setFilters(f => ({ ...f, matiere_id: e.target.value }))}
             className="select-field w-44">
@@ -427,8 +453,33 @@ export default function GradeList() {
                 : 'Aucune note pour ces filtres.'}
             </p>
           </div>
+        ) : !selectedClass ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-5">
+            {sortedClassNames.map((cName) => (
+              <div 
+                key={cName} 
+                onClick={() => setSelectedClass(cName)}
+                className="card p-6 cursor-pointer hover:border-primary-500 hover:shadow-md transition-all flex flex-col items-center justify-center text-center bg-white"
+              >
+                <div className="w-12 h-12 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center font-bold mb-3">
+                  {cName.substring(0, 2).toUpperCase()}
+                </div>
+                <h3 className="font-semibold text-gray-900 text-lg mb-1">{cName}</h3>
+                <p className="text-gray-500 text-sm font-medium">
+                  {groupedGrades[cName].length} note(s)
+                </p>
+              </div>
+            ))}
+          </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="p-1">
+            <div className="px-5 py-4 flex items-center gap-3 border-b border-gray-100 bg-gray-50/50">
+              <button onClick={() => setSelectedClass(null)} className="btn-secondary text-xs py-1.5 px-3">
+                ← Retour
+              </button>
+              <h2 className="font-semibold text-gray-800 text-base">Classe : {selectedClass}</h2>
+            </div>
+            <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
                 {isAdmin && (
@@ -453,7 +504,7 @@ export default function GradeList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {grades.map(g => (
+              {groupedGrades[selectedClass].map(g => (
                 <tr key={g.id}
                   className={`hover:bg-gray-50/50 transition-colors
                     ${selected.includes(g.id) ? 'bg-blue-50/40' : ''}`}>
@@ -527,6 +578,7 @@ export default function GradeList() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

@@ -17,7 +17,7 @@ import toast from 'react-hot-toast'
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
 
 // ── Modal justificatifs ───────────────────────────────────────────
-function JustificatifsModal({ rapport, onClose, isParent }) {
+function JustificatifsModal({ rapport, onClose, isParent, onValidated }) {
   const [items,    setItems]    = useState([])
   const [loading,  setLoading]  = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -85,11 +85,14 @@ function JustificatifsModal({ rapport, onClose, isParent }) {
                       onClick={async () => {
                         try {
                           await validerJustificatif(j.ID)
-                          toast.success('Justificatif validé et statut mis à jour !')
+                          toast.success('Absence justifiée — points remis à 0 !')
+                          // Recharger les justificatifs dans le modal
                           const { data } = await getJustificatifs({ idRapport: rapport.idRap })
                           setItems(data.justificatifs || data.data || [])
-                        } catch {
-                          toast.error('Erreur lors de la validation.')
+                          // Recharger la liste principale des rapports
+                          if (onValidated) onValidated()
+                        } catch (err) {
+                          toast.error(err?.response?.data?.message || 'Erreur lors de la validation.')
                         }
                       }}
                       className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold rounded-lg transition-all"
@@ -476,6 +479,7 @@ export default function ReportsPage() {
           rapport={selectedRap}
           isParent={isParent}
           onClose={() => setSelectedRap(null)}
+          onValidated={() => { fetchRapports(); setSelectedRap(null) }}
         />
       )}
     </div>

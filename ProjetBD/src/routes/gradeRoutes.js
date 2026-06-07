@@ -13,17 +13,32 @@ router.use(authMiddleware.protect);
  * Mappe vers evaluations
  */
 router.get('/', asyncHandler(async (req, res) => {
-  // Convertir les filtres frontend (classe_id, matiere_id, trimestre) 
-  // vers les filtres backend (idClasse, idCours, idSession)
+  const { id, userType, role } = req.user;
+  const pool = require('../config/db');
+
+  // Résoudre idAnnee depuis le libellé si nécessaire
+  let idAnnee = req.query.idAnnee ? parseInt(req.query.idAnnee) : null;
+  if (!idAnnee && req.query.annee_scolaire) {
+    const [anneeRows] = await pool.query(
+      'SELECT idAnnee FROM AnneeAcademique WHERE libelle = ? LIMIT 1',
+      [req.query.annee_scolaire]
+    );
+    if (anneeRows[0]) idAnnee = anneeRows[0].idAnnee;
+  }
+
   const filters = {
-    idClasse: req.query.classe_id,
-    idCours:  req.query.matiere_id,
-    idAnnee:  req.query.idAnnee,
-    isDeleted: req.query.archives === '1' ? 1 : 0
+    idClasse:  req.query.classe_id  || null,
+    idCours:   req.query.matiere_id || null,
+    idAnnee:   idAnnee,
+    isDeleted: req.query.archives === '1' ? 1 : 0,
+    // Pour un enseignant, ne retourner que ses propres notes
+    idPers: (userType === 'personne' && role === 1) ? id : null,
   };
+
   const evaluations = await evaluationModel.findAll(filters);
   return res.status(200).json({ data: evaluations });
 }));
+
 
 /**
  * GET /api/grades/form-data
@@ -36,37 +51,52 @@ router.get('/form-data', asyncHandler(async (req, res) => {
   if (userType === 'personne' && role === 1) {
     const currentAnnee = parseInt(req.idAnnee) || null;
 
-    // 1. Ses matières (depuis Cours via Enseignant — Cours.libelle = nom de la matière)
+    // 1. Ses matières (principale + table teacher_matieres)
     const [matieres] = await pool.query(`
-      SELECT DISTINCT c.idCours as id, c.libelle as nom 
+      SELECT DISTINCT c.idCours AS id, c.libelle AS nom
       FROM Cours c
-      JOIN Enseignant ens ON ens.idCours = c.idCours
-      WHERE ens.idPers = ? AND c.actif = 1
-      AND (c.idAnnee = ? OR ? IS NULL)
+      JOIN Enseignant ens ON ens.idPers = ?
+      WHERE c.actif = 1
+        AND (c.idAnnee = ? OR ? IS NULL)
+        AND (
+          c.idCours = ens.idCours
+          OR c.idCours IN (
+            SELECT tm.matiere_id
+            FROM teacher_matieres tm
+            WHERE tm.teacher_id = ens.idEnseignant
+          )
+        )
+      ORDER BY c.libelle ASC
     `, [id, currentAnnee, currentAnnee]);
 
     // 2. Ses élèves (classes enseignées ou salle dont il est titulaire)
     const [students] = await pool.query(`
-      SELECT DISTINCT e.matricule as id, e.nom, e.prenom, CONCAT(cl.libelle, ' - ', s.libelle) AS classe_nom
+      SELECT DISTINCT e.matricule AS id, e.nom, e.prenom, CONCAT(cl.libelle, ' - ', s.libelle) AS classe_nom
       FROM Eleve e
       JOIN Frequente f ON e.matricule = f.matricule
       JOIN Salle s ON f.idSalle = s.idSalle
       JOIN Classe cl ON cl.idClasse = s.idClasse
-      WHERE (s.idClasse IN (
-        -- Salles via le cours enseigné
-        SELECT c.idClasse FROM Cours c
-        JOIN Enseignant ens ON ens.idCours = c.idCours
-        WHERE ens.idPers = ?
-      ) OR s.idSalle IN (
-        -- Salles via Titulaire
-        SELECT sa.idSalle FROM Titulaire ti
-        JOIN Salle sa ON sa.idSalle = ti.idSalle
-        WHERE ti.idPers = ?
-      ))
+      WHERE (
+        s.idClasse IN (
+          SELECT c.idClasse FROM Cours c
+          JOIN Enseignant ens ON ens.idPers = ?
+          WHERE c.idCours = ens.idCours
+          UNION
+          SELECT c2.idClasse FROM teacher_matieres tm
+          JOIN Cours c2 ON c2.idCours = tm.matiere_id
+          JOIN Enseignant ens2 ON ens2.idEnseignant = tm.teacher_id
+          WHERE ens2.idPers = ?
+        )
+        OR s.idSalle IN (
+          SELECT sa.idSalle FROM Titulaire ti
+          JOIN Salle sa ON sa.idSalle = ti.idSalle
+          WHERE ti.idPers = ?
+        )
+      )
       AND e.actif = 1 AND e.isDeleted = 0
       AND (f.idAcademi = ? OR ? IS NULL)
       ORDER BY e.nom ASC, e.prenom ASC
-    `, [id, id, currentAnnee, currentAnnee]);
+    `, [id, id, id, currentAnnee, currentAnnee]);
 
     const [epreuves] = await pool.query('SELECT idEpreuve as id, libelle as nom FROM Epreuve');
     const [sessions] = await pool.query('SELECT idSession as id, libelle as nom FROM Session');
@@ -91,7 +121,7 @@ router.get('/form-data', asyncHandler(async (req, res) => {
  * POST /api/grades
  */
 router.post('/', asyncHandler(async (req, res) => {
-  const { student_id, matiere_id, valeur, commentaire, trimestre } = req.body;
+  const { student_id, matiere_id, valeur, commentaire, trimestre, idAnnee } = req.body;
   
   // Mapping vers evaluation
   const data = {
@@ -100,8 +130,8 @@ router.post('/', asyncHandler(async (req, res) => {
     matricule: student_id,
     idCours: matiere_id,
     idPers: req.user.id,
-    // On cherche une session par défaut pour le trimestre si idSession absent
-    idSession: req.body.idSession || trimestre || 1 
+    idSession: req.body.idSession || trimestre || 1,
+    idAnnee: idAnnee || req.idAnnee || 1,
   };
 
   const idEval = await evaluationModel.create(data);

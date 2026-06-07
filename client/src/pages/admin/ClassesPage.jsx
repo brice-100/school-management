@@ -258,7 +258,7 @@ export default function ClassesPage() {
   const [tab, setTab] = useState('classes')
 
   const [classes,   setClasses]   = useState([])
-  const [classForm, setClassForm] = useState({ libelle:'', idCycle:'' })
+  const [classForm, setClassForm] = useState({ libelle:'', idCycle:'', pension:'', inscription:'' })
   const [classEdit, setClassEdit] = useState(null)
 
   const [cycles,    setCycles]    = useState([])
@@ -298,9 +298,14 @@ export default function ClassesPage() {
   }
 
   const handleClassEdit = (item) => {
-    if (!item) { setClassEdit(null); setClassForm({ libelle:'', idCycle:'' }); return }
+    if (!item) { setClassEdit(null); setClassForm({ libelle:'', idCycle:'', pension:'', inscription:'' }); return }
     setClassEdit(item.idClasse)
-    setClassForm({ libelle: item.libelle||'', idCycle: String(item.idCycle||'') })
+    setClassForm({
+      libelle: item.libelle || '',
+      idCycle: String(item.idCycle || ''),
+      pension: item.pension !== null && item.pension !== undefined ? String(item.pension) : '',
+      inscription: item.inscription !== null && item.inscription !== undefined ? String(item.inscription) : '',
+    })
   }
 
   const handleClassDelete = async (id) => {
@@ -392,14 +397,31 @@ export default function ClassesPage() {
               key:'idCycle', label:'Cycle',
               options: cycles.map(c => ({ value: String(c.idCycle), label: c.libelle })),
             },
+            { key:'pension', label:'Pension (FCFA/tranche)', placeholder:'Ex: 25000', type:'number' },
+            { key:'inscription', label:'Inscription (FCFA)', placeholder:'Ex: 50000', type:'number' },
           ]}
           onAdd={handleClassSubmit} onEdit={handleClassEdit} onDelete={handleClassDelete}
           extraActions={(item) => {
-            const cycle = cycles.find(c =>
-              String(c.idCycle) === String(item.idCycle))
-            return cycle
-              ? <span className="badge bg-purple-50 text-purple-700">{cycle.libelle}</span>
-              : <span className="text-gray-400 text-xs">—</span>
+            const cycle = cycles.find(c => String(c.idCycle) === String(item.idCycle))
+            const pension = item.pension ?? item.pension_effective
+            const inscription = item.inscription ?? item.inscription_effective
+            return (
+              <div className="flex flex-col gap-0.5">
+                {cycle && <span className="badge bg-purple-50 text-purple-700">{cycle.libelle}</span>}
+                {pension != null
+                  ? <span className="text-xs text-emerald-700 font-medium">
+                      Pension : {Number(pension).toLocaleString('fr-FR')} FCFA
+                    </span>
+                  : <span className="text-xs text-amber-600">Pension : non définie</span>
+                }
+                {inscription != null
+                  ? <span className="text-xs text-blue-700">
+                      Inscription : {Number(inscription).toLocaleString('fr-FR')} FCFA
+                    </span>
+                  : <span className="text-xs text-gray-400">Inscription : non définie</span>
+                }
+              </div>
+            )
           }}
         />
       )}

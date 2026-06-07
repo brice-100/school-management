@@ -37,12 +37,14 @@ const findAll = async (filters = {}) => {
     WHERE ev.isDeleted = ?
   `;
   const params = [filters.isDeleted !== undefined ? filters.isDeleted : 0];
-  
-  if (filters.matricule) { query += ' AND ev.matricule = ?'; params.push(filters.matricule); }
-  if (filters.idCours) { query += ' AND ev.idCours = ?'; params.push(filters.idCours); }
-  if (filters.idSession) { query += ' AND ev.idSession = ?'; params.push(filters.idSession); }
-  if (filters.idAnnee) { query += ' AND ev.idAnnee = ?'; params.push(filters.idAnnee); }
-  
+
+  if (filters.matricule)  { query += ' AND ev.matricule = ?';    params.push(filters.matricule); }
+  if (filters.idCours)    { query += ' AND ev.idCours = ?';      params.push(filters.idCours); }
+  if (filters.idSession)  { query += ' AND ev.idSession = ?';    params.push(filters.idSession); }
+  if (filters.idAnnee)    { query += ' AND ev.idAnnee = ?';      params.push(filters.idAnnee); }
+  if (filters.idPers)     { query += ' AND ev.idPers = ?';       params.push(filters.idPers); }
+  if (filters.idClasse)   { query += ' AND cl.idClasse = ?';     params.push(filters.idClasse); }
+
   query += ' ORDER BY ev.created_at DESC';
   const [rows] = await pool.query(query, params);
   return rows;

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Search, Plus, Pencil, Trash2, Eye } from 'lucide-react'
 import { getTeachers, deleteTeacher, restoreTeacher, hardDeleteTeacher } from '../../services/teacherService'
+import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 import EnseignantFicheModal from '../../components/EnseignantFicheModal'
 
@@ -11,6 +12,9 @@ export default function TeacherList() {
   const [search, setSearch] = useState('')
   const [showArchives, setShowArchives] = useState(false)
   const [ficheId, setFicheId] = useState(null)
+  const { user } = useAuth()
+
+  const isSuperAdmin = user?.role === 'admin' && user?.typeAdmin === 0;
 
   const fetchTeachers = async () => {
     if (teachers.length === 0) setLoading(true)
@@ -76,7 +80,7 @@ export default function TeacherList() {
           <button onClick={() => setShowArchives(!showArchives)} className="btn-secondary text-xs sm:text-sm py-1.5 px-3">
             {showArchives ? 'Actifs' : 'Archives'}
           </button>
-          {!showArchives && (
+          {!showArchives && isSuperAdmin && (
             <Link to="/teachers/new" className="btn-primary flex-1 sm:flex-none flex items-center justify-center gap-2 text-xs sm:text-sm py-1.5 px-3">
               <Plus size={16} /> Ajouter
             </Link>
@@ -112,7 +116,7 @@ export default function TeacherList() {
             <p className="text-gray-400 text-sm mb-3">
               {showArchives ? 'Aucun enseignant archivé.' : 'Aucun enseignant enregistré.'}
             </p>
-            {!showArchives && (
+            {!showArchives && isSuperAdmin && (
               <Link to="/teachers/new" className="btn-primary">
                 <Plus size={15} /> Ajouter un enseignant
               </Link>
@@ -154,14 +158,28 @@ export default function TeacherList() {
                     }
                   </td>
                   <td className="px-5 py-3.5">
-                    {t.matiere_nom
-                      ? <span className="badge bg-amber-50 text-amber-700">{t.matiere_nom}</span>
-                      : <span className="text-gray-400">—</span>
-                    }
+                    {(() => {
+                      // Support multi-matières
+                      const list = t.matieres && t.matieres.length > 0
+                        ? t.matieres
+                        : t.matiere_nom
+                          ? [{ libelle: t.matiere_nom }]
+                          : []
+                      if (list.length === 0) return <span className="text-gray-400">—</span>
+                      return (
+                        <div className="flex flex-wrap gap-1">
+                          {list.map((m, i) => (
+                            <span key={i} className="badge bg-amber-50 text-amber-700 text-[11px]">
+                              {m.libelle || m.nom}
+                            </span>
+                          ))}
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1">
-                      {showArchives ? (
+                      {showArchives && isSuperAdmin ? (
                         <div className="flex gap-1.5">
                           <button
                             onClick={() => handleRestore(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
@@ -177,7 +195,7 @@ export default function TeacherList() {
                             <Trash2 size={15} />
                           </button>
                         </div>
-                      ) : (
+                      ) : (!showArchives) ? (
                         <>
                           <button
                             onClick={() => setFicheId(t.idEnseignant || t.id)}
@@ -189,15 +207,17 @@ export default function TeacherList() {
                           <Link to={`/teachers/${t.idEnseignant || t.id}/edit`} className="btn-icon">
                             <Pencil size={15} />
                           </Link>
-                          <button
-                            onClick={() => handleDelete(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
-                            className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
-                            title="Archiver"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          {isSuperAdmin && (
+                            <button
+                              onClick={() => handleDelete(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
+                              className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
+                              title="Archiver"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </>
-                      )}
+                      ) : null}
                     </div>
                   </td>
                 </tr>

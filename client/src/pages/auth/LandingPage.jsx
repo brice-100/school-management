@@ -297,7 +297,7 @@ function TestimonialCard({ name, role, school, quote, avatar, delay = 0 }) {
       </div>
 
    {/* Citation */}
-    <blockquote className="text-slate-700 leading-relaxed mb-5 text-sm italic before:content-['\201C'] before:text-amber-400 before:text-2xl before:font-serif before:mr-0.5">
+    <blockquote className="text-slate-700 leading-relaxed mb-5 text-sm italic">
       {quote}
     </blockquote>
 
@@ -611,7 +611,7 @@ function FeaturesSection() {
               fontFamily: "'Playfair Display', Georgia, serif",
               fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)',
             }}>
-            Tout ce dont notre école gère
+            fonctionnalités de notre plateforme
                       </h2>
           <p className="text-slate-500 text-lg max-w-2xl mx-auto">
             Une suite complète d'outils pensée pour les établissements scolaires
