@@ -6,24 +6,40 @@ const { mountSwagger } = require('./utils/swagger');
 
 const app = express();
 
+const LOCAL_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+];
+
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  if (LOCAL_ORIGINS.includes(origin)) return true;
+
+  const clientUrl = process.env.CLIENT_URL?.replace(/\/$/, '');
+  if (clientUrl && origin === clientUrl) return true;
+
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname.endsWith('.vercel.app')) return true;
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 // ─── Middleware globaux ───────────────────────────────────────
 app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      process.env.CLIENT_URL // Cette variable contiendra votre lien Vercel
-    ];
-    // Autoriser les requêtes sans origine (comme Postman) ou venant de localhost/127.0.0.1
-    if (!origin ||  allowedOrigins.includes(origin)) {
+  origin(origin, callback) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
-      callback(null, process.env.CLIENT_URL || 'http://localhost:5173');
+      callback(new Error(`CORS: origine non autorisée (${origin})`));
     }
   },
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

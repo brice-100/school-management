@@ -18,7 +18,10 @@
   },
   "scripts": {
     "build": "echo 'No build step required'",
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node run_migrations.js && node src/index.js",
+    "dev": "nodemon src/index.js",
+    "db:import": "node import_db.js",
+    "db:seed": "node seed_admin.js",
+    "db:migrate": "node run_migrations.js"
   }
 }
