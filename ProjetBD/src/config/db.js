@@ -2,20 +2,40 @@ const mysql = require('mysql2/promise');
 
 // Support Railway MYSQL_URL ou variables individuelles
 function getDbConfig() {
-  const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL;
-
-  if (dbUrl) {
-    console.log('📡 Connexion MySQL via URL (MYSQL_URL)');
-    const url = new URL(dbUrl);
+  // 1. Priorité absolue aux variables natives que Railway injecte automatiquement
+  if (process.env.MYSQLHOST) {
+    console.log('📡 Connexion MySQL via variables Railway directes (MYSQLHOST)');
     return {
-      host:     url.hostname,
-      port:     parseInt(url.port) || 3306,
-      user:     decodeURIComponent(url.username),
-      password: decodeURIComponent(url.password),
-      database: url.pathname.replace(/^\//, ''),
+      host:     process.env.MYSQLHOST,
+      port:     parseInt(process.env.MYSQLPORT) || 3306,
+      user:     process.env.MYSQLUSER || 'root',
+      password: process.env.MYSQLPASSWORD,
+      database: process.env.MYSQLDATABASE,
     };
   }
 
+  // 2. En cas de repli, on extrait depuis les chaînes d'URL
+  const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL;
+
+  if (dbUrl) {
+    try {
+      console.log('📡 Connexion MySQL via URL (MYSQL_URL)');
+      // Astuce : On remplace temporairement mysql:// par http:// pour éviter que le constructeur URL de Node ne panique
+      const safeUrl = dbUrl.replace(/^mysql:/i, 'http:');
+      const url = new URL(safeUrl);
+      return {
+        host:     url.hostname,
+        port:     parseInt(url.port) || 3306,
+        user:     decodeURIComponent(url.username),
+        password: decodeURIComponent(url.password),
+        database: url.pathname.replace(/^\//, ''),
+      };
+    } catch (e) {
+      console.error('⚠️ Impossible de parser l’URL de la DB, repli sur le local...', e.message);
+    }
+  }
+
+  // 3. Configuration locale par défaut
   console.log('📡 Connexion MySQL via variables individuelles (DB_HOST/PORT/USER...)');
   return {
     host:     process.env.DB_HOST     || '127.0.0.1',
