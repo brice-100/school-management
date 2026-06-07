@@ -9,6 +9,12 @@ const app = express();
 // ─── Middleware globaux ───────────────────────────────────────
 app.use(cors({
   origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
+      process.env.CLIENT_URL // Cette variable contiendra votre lien Vercel
+    ];
     // Autoriser les requêtes sans origine (comme Postman) ou venant de localhost/127.0.0.1
     if (!origin || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
       callback(null, true);
