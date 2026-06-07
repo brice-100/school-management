@@ -3,14 +3,18 @@ const { execSync } = require('child_process');
 
 // Lance les migrations, puis démarre le serveur
 // Compatible Linux (Railway) et Windows (local)
-try {
-  console.log('🔄 Lancement des migrations...');
-  execSync('node run_migrations.js', { stdio: 'inherit' });
-  console.log('✅ Migrations terminées');
-} catch (err) {
-  console.error('⚠️  Erreur lors des migrations (non bloquante) :', err.message);
-  // On ne bloque pas le démarrage du serveur si les migrations échouent
-}
+const { fork } = require('child_process');
 
-// Démarrer le serveur Express
+console.log('🔄 Lancement des migrations en arrière-plan...');
+const migrator = fork(require.resolve('./run_migrations.js'));
+
+migrator.on('exit', (code) => {
+  if (code === 0) {
+    console.log('✅ Migrations terminées avec succès');
+  } else {
+    console.error(`❌ Échec des migrations (code: ${code})`);
+  }
+});
+
+// Démarrer le serveur Express immédiatement
 require('./src/index.js');
