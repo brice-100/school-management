@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ override: false });
 const { fork } = require('child_process');
 
 // Lance les migrations en arrière-plan (non bloquant)
