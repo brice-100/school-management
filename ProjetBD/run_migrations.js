@@ -39,14 +39,14 @@ async function addColumnIfMissing(pool, table, column, definition, label) {
 
 async function fixAutoIncrements(pool) {
   const tables = [
-    ['Personne',    'idPers'],
-    ['Eleve',       'idEleve'],
-    ['Enseignant',  'idEnseignant'],
-    ['Parents',     'idParent'],
-    ['Classe',      'idClasse'],
-    ['Paiement',    'idPaiement'],
-    ['Cours',       'idCours'],
-    ['Evaluation',  'idEvaluation'],
+    ['personne',    'idPers'],
+    ['eleve',       'idEleve'],
+    ['enseignant',  'idEnseignant'],
+    ['parents',     'idParent'],
+    ['classe',      'idClasse'],
+    ['paiement',    'idPaiement'],
+    ['cours',       'idCours'],
+    ['evaluation',  'idEvaluation'],
   ];
 
   await pool.query('SET FOREIGN_KEY_CHECKS = 0');
