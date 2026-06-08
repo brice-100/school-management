@@ -138,26 +138,26 @@ async function runMigrations() {
     await seedAdmin(pool);
 
     // ─── 3. Colonnes manquantes ───────────────────────────────────
-    await addColumnIfMissing(pool, 'AnneeAcademique', 'est_active',
+    await addColumnIfMissing(pool, 'anneeacademique', 'est_active',
       'TINYINT(1) UNSIGNED NOT NULL DEFAULT 0', 'Colonne AnneeAcademique.est_active');
-    await addColumnIfMissing(pool, 'Personne', 'actif',
+    await addColumnIfMissing(pool, 'personne', 'actif',
       'TINYINT(1) UNSIGNED NOT NULL DEFAULT 0', 'Colonne Personne.actif');
-    await addColumnIfMissing(pool, 'Paiement', 'valide',
+    await addColumnIfMissing(pool, 'paiement', 'valide',
       'TINYINT(1) UNSIGNED NOT NULL DEFAULT 0', 'Colonne Paiement.valide');
-    await addColumnIfMissing(pool, 'Paiement', 'idTranche',
+    await addColumnIfMissing(pool, 'paiement', 'idTranche',
       'INT UNSIGNED NULL', 'Colonne Paiement.idTranche');
-    await addColumnIfMissing(pool, 'Paiement', 'type_paiement',
+    await addColumnIfMissing(pool, 'paiement', 'type_paiement',
       "VARCHAR(30) NOT NULL DEFAULT 'cash'", 'Colonne Paiement.type_paiement');
-    await addColumnIfMissing(pool, 'Paiement', 'phone_paiement',
+    await addColumnIfMissing(pool, 'paiement', 'phone_paiement',
       'VARCHAR(20) NULL', 'Colonne Paiement.phone_paiement');
-    await addColumnIfMissing(pool, 'Session', 'date_passage',
+    await addColumnIfMissing(pool, 'session', 'date_passage',
       'DATE NULL', 'Colonne Session.date_passage');
-    await addColumnIfMissing(pool, 'EmploiDuTemps', 'idAnnee',
+    await addColumnIfMissing(pool, 'emploi_du_temps', 'idAnnee',
       'INT UNSIGNED NULL', 'Colonne EmploiDuTemps.idAnnee');
 
     // ─── 4. Données initiales ─────────────────────────────────────
     await runSql(pool, `
-      INSERT IGNORE INTO Mode (idMode, libelle, information, actif, idFondateur, created_at)
+      INSERT IGNORE INTO mode (idMode, libelle, information, actif, idFondateur, created_at)
       VALUES
         (1, 'Cash',              'Paiement en espèces directement à l''école', 1, 1, NOW()),
         (2, 'Mobile Money',      'Paiement via MTN Mobile Money',               1, 1, NOW()),
@@ -166,7 +166,7 @@ async function runMigrations() {
     `, 'Données initiales Mode');
 
     await runSql(pool, `
-      INSERT IGNORE INTO NatureEpreuve (idNature, libelle, description)
+      INSERT IGNORE INTO natureepreuve (idNature, libelle, description)
       VALUES
         (1, 'Contrôle Continu', 'Évaluation continue en classe'),
         (2, 'Examen',           'Examen trimestriel ou semestriel'),
@@ -175,10 +175,10 @@ async function runMigrations() {
     `, 'Données initiales NatureEpreuve');
 
     await runSql(pool, `
-      UPDATE AnneeAcademique SET est_active = 1
-      WHERE idAnnee = (SELECT MAX(idAnnee) FROM (SELECT idAnnee FROM AnneeAcademique) AS sub)
+      UPDATE anneeacademique SET est_active = 1
+      WHERE idAnnee = (SELECT MAX(idAnnee) FROM (SELECT idAnnee FROM anneeacademique) AS sub)
         AND NOT EXISTS (
-          SELECT 1 FROM (SELECT COUNT(*) as cnt FROM AnneeAcademique WHERE est_active = 1) AS chk
+          SELECT 1 FROM (SELECT COUNT(*) as cnt FROM anneeacademique WHERE est_active = 1) AS chk
           WHERE cnt > 0
         )
     `, 'Année académique active');
@@ -188,20 +188,20 @@ async function runMigrations() {
         teacher_id INT UNSIGNED NOT NULL,
         matiere_id INT UNSIGNED NOT NULL,
         PRIMARY KEY (teacher_id, matiere_id),
-        CONSTRAINT fk_tm_teacher FOREIGN KEY (teacher_id) REFERENCES Enseignant(idEnseignant) ON DELETE CASCADE,
-        CONSTRAINT fk_tm_matiere FOREIGN KEY (matiere_id) REFERENCES Cours(idCours) ON DELETE CASCADE
+        CONSTRAINT fk_tm_teacher FOREIGN KEY (teacher_id) REFERENCES enseignant(idEnseignant) ON DELETE CASCADE,
+        CONSTRAINT fk_tm_matiere FOREIGN KEY (matiere_id) REFERENCES cours(idCours) ON DELETE CASCADE
       )
     `, 'Table teacher_matieres');
 
     await runSql(pool, `
       INSERT IGNORE INTO teacher_matieres (teacher_id, matiere_id)
-      SELECT idEnseignant, idCours FROM Enseignant WHERE idCours IS NOT NULL
+      SELECT idEnseignant, idCours FROM enseignant WHERE idCours IS NOT NULL
     `, 'Peuplement teacher_matieres');
 
     // ─── 5. Migration matricule INT → VARCHAR(50) ─────────────────
     const [eleveMatCol] = await pool.query(
-      `SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'Eleve' AND COLUMN_NAME = 'matricule'`,
+      `SELECT DATA_TYPE FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'eleve' AND COLUMN_NAME = 'matricule'`,
       [process.env.DB_NAME]
     );
     const currentType = eleveMatCol[0]?.DATA_TYPE?.toLowerCase() || '';
@@ -210,28 +210,28 @@ async function runMigrations() {
       console.log('🔄 Conversion matricule INT → VARCHAR(50)...');
       await pool.query('SET FOREIGN_KEY_CHECKS = 0');
       const fksToDrop = [
-        { table: 'Evaluation', fk: 'matr'   },
-        { table: 'Frequente',  fk: 'freq'   },
-        { table: 'Paiement',   fk: 'enf'    },
-        { table: 'Parents',    fk: 'enft'   },
-        { table: 'Rapport',    fk: 'enfant' },
+        { table: 'evaluation', fk: 'matr'   },
+        { table: 'frequente',  fk: 'freq'   },
+        { table: 'paiement',   fk: 'enf'    },
+        { table: 'parents',    fk: 'enft'   },
+        { table: 'rapport',    fk: 'enfant' },
       ];
       for (const { table, fk } of fksToDrop) {
         try {
           await pool.query(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`${fk}\``);
         } catch { /* FK peut ne pas exister */ }
       }
-      for (const table of ['Eleve', 'Evaluation', 'Frequente', 'Paiement', 'Parents', 'Rapport']) {
+      for (const table of ['eleve', 'evaluation', 'frequente', 'paiement', 'parents', 'rapport']) {
         await runSql(pool,
           `ALTER TABLE \`${table}\` MODIFY matricule VARCHAR(50) NOT NULL`,
           `Matricule VARCHAR(50) sur ${table}`);
       }
       const fksToCreate = [
-        { table: 'Evaluation', fk: 'matr',   ref: 'Eleve', col: 'matricule' },
-        { table: 'Frequente',  fk: 'freq',   ref: 'Eleve', col: 'matricule' },
-        { table: 'Paiement',   fk: 'enf',    ref: 'Eleve', col: 'matricule' },
-        { table: 'Parents',    fk: 'enft',   ref: 'Eleve', col: 'matricule' },
-        { table: 'Rapport',    fk: 'enfant', ref: 'Eleve', col: 'matricule' },
+        { table: 'evaluation', fk: 'matr',   ref: 'eleve', col: 'matricule' },
+        { table: 'frequente',  fk: 'freq',   ref: 'eleve', col: 'matricule' },
+        { table: 'paiement',   fk: 'enf',    ref: 'eleve', col: 'matricule' },
+        { table: 'parents',    fk: 'enft',   ref: 'eleve', col: 'matricule' },
+        { table: 'rapport',    fk: 'enfant', ref: 'eleve', col: 'matricule' },
       ];
       for (const { table, fk, ref, col } of fksToCreate) {
         try {
@@ -253,9 +253,9 @@ async function runMigrations() {
     // ─── Rapport final ────────────────────────────────────────────
     const [cols] = await pool.query(`
       SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE
-      FROM INFORMATION_SCHEMA.COLUMNS
+      FROM information_schema.COLUMNS
       WHERE TABLE_SCHEMA = ?
-        AND TABLE_NAME IN ('Paiement','Session','AnneeAcademique','Personne')
+        AND TABLE_NAME IN ('paiement','session','anneeacademique','personne')
         AND COLUMN_NAME IN ('valide','idTranche','type_paiement','phone_paiement','date_passage','est_active','actif')
       ORDER BY TABLE_NAME, COLUMN_NAME
     `, [process.env.DB_NAME]);
