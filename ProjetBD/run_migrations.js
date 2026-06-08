@@ -81,11 +81,11 @@ async function fixAutoIncrements(pool) {
 
 async function seedAdmin(pool) {
   const bcrypt = require('bcryptjs');
-  const [rows] = await pool.query('SELECT ID FROM Admin WHERE typeAdmin = 0 LIMIT 1');
+  const [rows] = await pool.query('SELECT ID FROM admin WHERE typeAdmin = 0 LIMIT 1');
   if (rows.length === 0) {
     const hash = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD, 10);
     await pool.query(
-      `INSERT INTO Admin (ID, nom, username, password, typeAdmin, mobile, alanyaID, created_at)
+      `INSERT INTO admin (ID, nom, username, password, typeAdmin, mobile, alanyaID, created_at)
        VALUES (1, 'Root', ?, ?, 0, '0000', '0', NOW())`,
       [process.env.ADMIN_DEFAULT_USERNAME, hash]
     );
