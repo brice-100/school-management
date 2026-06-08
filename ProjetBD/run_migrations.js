@@ -38,12 +38,60 @@ async function addColumnIfMissing(pool, table, column, definition, label) {
   await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
   console.log(`✅ ${label}`);
 }
+// ─── Correction AUTO_INCREMENT (idempotent) ───────────────────
+async function fixAutoIncrements(pool) {
+  const fixes = [
+    // Désactive les FK pour pouvoir modifier
+    `SET FOREIGN_KEY_CHECKS = 0`,
+    
+    // Toutes les tables avec ID sans AUTO_INCREMENT
+    `ALTER TABLE Personne MODIFY idPers INT UNSIGNED NOT NULL AUTO_INCREMENT`,
+    `ALTER TABLE Eleve MODIFY idEleve INT UNSIGNED NOT NULL AUTO_INCREMENT`,
+    `ALTER TABLE Enseignant MODIFY idEnseignant INT UNSIGNED NOT NULL AUTO_INCREMENT`,
+    `ALTER TABLE Parents MODIFY idParent INT UNSIGNED NOT NULL AUTO_INCREMENT`,
+    `ALTER TABLE Classe MODIFY idClasse INT UNSIGNED NOT NULL AUTO_INCREMENT`,
+    `ALTER TABLE Paiement MODIFY idPaiement INT UNSIGNED NOT NULL AUTO_INCREMENT`,
+    `ALTER TABLE Cours MODIFY idCours INT UNSIGNED NOT NULL AUTO_INCREMENT`,
+    `ALTER TABLE Evaluation MODIFY idEvaluation INT UNSIGNED NOT NULL AUTO_INCREMENT`,
+    
+    // Réactive les FK
+    `SET FOREIGN_KEY_CHECKS = 1`,
+  ];
 
+  for (const sql of fixes) {
+    try {
+      await pool.query(sql);
+    } catch (err) {
+      // Ignore si déjà appliqué
+      if (!['ER_AUTO_INCREMENT_EXISTS', 'ER_DUP_FIELDNAME'].includes(err.code)) {
+        console.log(`ℹ️ ${sql.substring(0, 60)}... → ${err.message}`);
+      }
+    }
+  }
+  console.log('✅ AUTO_INCREMENT vérifié sur toutes les tables');
+}
+async function seedAdmin(pool) {
+  const bcrypt = require('bcryptjs');
+  const [rows] = await pool.query('SELECT ID FROM Admin WHERE typeAdmin = 0 LIMIT 1');
+  
+  if (rows.length === 0) {
+    const hash = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD, 10);
+    await pool.query(
+      'INSERT INTO Admin (ID, nom, username, password, typeAdmin, mobile, alanyaID, created_at) VALUES (1, ?, ?, ?, 0, ?, ?, NOW())',
+      ['Root', process.env.ADMIN_DEFAULT_USERNAME, hash, '0000', '0']
+    );
+    console.log('✅ Super admin créé');
+  } else {
+    console.log('ℹ️ Super admin déjà présent');
+  }
+}
 async function runMigrations() {
   // Support Railway MYSQL_URL ou variables individuelles
   const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL;
   let dbConfig;
   
+  await fixAutoIncrements(pool); 
+  await seedAdmin(pool);   
   if (dbUrl) {
     const url = new URL(dbUrl);
     dbConfig = {
