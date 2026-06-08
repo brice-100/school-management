@@ -14,22 +14,22 @@ const getOverview = asyncHandler(async (req, res) => {
   const [[{ totalParents }]]    = await pool.query('SELECT COUNT(*) as totalParents FROM Personne WHERE typePersonne = 4');
   const [[{ pendingPersons }]]  = await pool.query('SELECT COUNT(*) as pendingPersons FROM Personne WHERE actif = 0');
 
-  let revenueQuery = 'SELECT COALESCE(SUM(montant), 0) as revenue FROM paiement WHERE valide = 1';
+  let revenueQuery = 'SELECT COALESCE(SUM(montant), 0) as revenue FROM Paiement WHERE valide = 1';
   const revenueParams = [];
   if (idAnnee) { revenueQuery += ' AND idAca = ?'; revenueParams.push(idAnnee); }
   const [[{ revenue }]] = await pool.query(revenueQuery, revenueParams);
 
-  const [[{ enAttente }]] = await pool.query('SELECT COUNT(*) as enAttente FROM paiement WHERE valide = 0');
-  const [[{ totalEvaluations }]] = await pool.query('SELECT COUNT(*) as totalEvaluations FROM evaluation');
+  const [[{ enAttente }]] = await pool.query('SELECT COUNT(*) as enAttente FROM Paiement WHERE valide = 0');
+  const [[{ totalEvaluations }]] = await pool.query('SELECT COUNT(*) as totalEvaluations FROM Evaluation');
 
   // Calcul dynamique du total attendu basé sur la table scolarite
   let attenduQuery = `
     SELECT COALESCE(SUM(s.inscription + s.pension), 0) as totalAttendu
-    FROM eleve e
-    JOIN frequente f ON e.matricule = f.matricule
-    JOIN salle sa ON f.idSalle = sa.idSalle
-    JOIN classe c ON sa.idClasse = c.idClasse
-    JOIN scolarite s ON s.idCycle = c.idCycle
+    FROM Eleve e
+    JOIN Frequente f ON e.matricule = f.matricule
+    JOIN Salle sa ON f.idSalle = sa.idSalle
+    JOIN Classe c ON sa.idClasse = c.idClasse
+    JOIN Scolarite s ON s.idCycle = c.idCycle
     WHERE e.actif = 1
   `;
   const attenduParams = [];
@@ -47,9 +47,9 @@ const getOverview = asyncHandler(async (req, res) => {
     SELECT 
       AVG(ev.note) as moyenneGale,
       COUNT(DISTINCT ev.matricule) as nbElevesEvalues
-    FROM evaluation ev
-    JOIN session s ON ev.idSession = s.idSession
-    JOIN trimestre t ON s.idTrimestre = t.idTrimes
+    FROM Evaluation ev
+    JOIN Session s ON ev.idSession = s.idSession
+    JOIN Trimestre t ON s.idTrimestre = t.idTrimes
     WHERE 1=1
   `;
   const academicParams = [];
@@ -63,9 +63,9 @@ const getOverview = asyncHandler(async (req, res) => {
   let reussiteQuery = `
     SELECT COUNT(*) as nbAdmis FROM (
       SELECT ev.matricule, AVG(ev.note) as moy
-      FROM evaluation ev
-      JOIN session s ON ev.idSession = s.idSession
-      JOIN trimestre t ON s.idTrimestre = t.idTrimes
+      FROM Evaluation ev
+      JOIN Session s ON ev.idSession = s.idSession
+      JOIN Trimestre t ON s.idTrimestre = t.idTrimes
       WHERE 1=1
       ${idAnnee ? ' AND t.idAca = ?' : ''}
       GROUP BY ev.matricule
@@ -106,9 +106,9 @@ const getOverview = asyncHandler(async (req, res) => {
 const getNotesByClasse = asyncHandler(async (req, res) => {
   const [rows] = await pool.query(`
     SELECT c.libelle as classe, ROUND(AVG(ev.note), 2) as moyenne, COUNT(ev.idEval) as total_notes
-    FROM evaluation ev
-    JOIN cours co ON ev.idCours = co.idCours
-    JOIN classe c ON co.idClasse = c.idClasse
+    FROM Evaluation ev
+    JOIN Cours co ON ev.idCours = co.idCours
+    JOIN Classe c ON co.idClasse = c.idClasse
     GROUP BY c.idClasse, c.libelle
     ORDER BY moyenne DESC
   `);
@@ -122,8 +122,8 @@ const getNotesByClasse = asyncHandler(async (req, res) => {
 const getNotesByMatiere = asyncHandler(async (req, res) => {
   const [rows] = await pool.query(`
     SELECT co.libelle as matiere, ROUND(AVG(ev.note), 2) as moyenne, COUNT(ev.idEval) as total_notes
-    FROM evaluation ev
-    JOIN cours co ON ev.idCours = co.idCours
+    FROM Evaluation ev
+    JOIN Cours co ON ev.idCours = co.idCours
     GROUP BY co.idCours, co.libelle
     ORDER BY moyenne DESC
     LIMIT 20
@@ -140,7 +140,7 @@ const getPaymentsByMonth = asyncHandler(async (req, res) => {
       DATE_FORMAT(dateEnregistrer, '%M') as mois,
       SUM(montant) as paye,
       SUM(montant) as attendu
-    FROM paiement
+    FROM Paiement
     WHERE valide = 1
     GROUP BY DATE_FORMAT(dateEnregistrer, '%M'), MONTH(dateEnregistrer)
     ORDER BY MONTH(dateEnregistrer)
@@ -156,7 +156,7 @@ const getPaymentsByStatut = asyncHandler(async (req, res) => {
     SELECT
       CASE WHEN valide = 1 THEN 'Validé' ELSE 'En attente' END as name,
       COUNT(*) as value
-    FROM paiement
+    FROM Paiement
     GROUP BY valide
   `);
   return res.status(200).json({ data: rows });
@@ -171,8 +171,8 @@ const getReussiteByTrimestre = asyncHandler(async (req, res) => {
       s.libelle as trimestre,
       ROUND(AVG(ev.note), 2) as moyenne,
       ROUND(SUM(CASE WHEN ev.note >= 10 THEN 1 ELSE 0 END) * 100 / COUNT(*), 1) as taux
-    FROM evaluation ev
-    JOIN session s ON ev.idSession = s.idSession
+    FROM Evaluation ev
+    JOIN Session s ON ev.idSession = s.idSession
     GROUP BY s.idSession, s.libelle
     ORDER BY s.idSession ASC
   `);

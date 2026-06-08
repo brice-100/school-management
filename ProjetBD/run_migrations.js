@@ -258,15 +258,13 @@ async function runMigrations() {
         { table: 'Rapport',    fk: 'enfant', ref: 'Eleve', col: 'matricule' },
       ];
       for (const { table, fk, ref, col } of fksToCreate) {
-        const actualTable = await resolveTableName(pool, process.env.DB_NAME, table) || table;
-        const actualRef = await resolveTableName(pool, process.env.DB_NAME, ref) || ref;
         try {
           await pool.query(
-            `ALTER TABLE \`${actualTable}\` ADD CONSTRAINT \`${fk}\`
-             FOREIGN KEY (\`matricule\`) REFERENCES \`${actualRef}\`(\`${col}\`)
+            `ALTER TABLE \`${table}\` ADD CONSTRAINT \`${fk}\`
+             FOREIGN KEY (\`matricule\`) REFERENCES \`${ref}\`(\`${col}\`)
              ON DELETE NO ACTION ON UPDATE CASCADE`
           );
-          console.log(`✅ FK ${fk} recrée sur ${actualTable}`);
+          console.log(`✅ FK ${fk} recrée sur ${table}`);
         } catch (e) {
           console.log(`ℹ️  FK ${fk} non recrée : ${e.message}`);
         }

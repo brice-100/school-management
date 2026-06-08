@@ -13,7 +13,7 @@ const getSituationFinanciere = async () => {
         COALESCE(c.inscription, s.inscription, 0) + 
           (COALESCE(c.pension, s.pension, 0) * COALESCE(s.nbreTranche, 3)) as total_annuel_du,
         COALESCE(
-          (SELECT SUM(pa.montant) FROM paiement pa 
+          (SELECT SUM(pa.montant) FROM Paiement pa 
            WHERE pa.matricule = e.matricule AND pa.valide = 1 AND pa.isDeleted = 0
            ${idAca ? 'AND pa.idAca = ' + pool.escape(idAca) : ''}),
           0
@@ -35,7 +35,7 @@ const getSituationFinanciere = async () => {
 
       const [tranches] = await pool.query(`
         SELECT t.libelle
-        FROM paiement p
+        FROM Paiement p
         JOIN Tranches t ON p.idTranche = t.idTranche
         WHERE p.matricule = ? AND p.valide = 1 AND p.isDeleted = 0 AND p.idTranche IS NOT NULL
         ${idAca ? 'AND p.idAca = ' + pool.escape(idAca) : ''}

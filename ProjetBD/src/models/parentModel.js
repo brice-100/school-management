@@ -177,7 +177,7 @@ const removeHard = async (idPers) => {
     }
     
     // 3. Supprimer de messageinterne liés à cet idPers (expéditeur ou destinataire)
-    await conn.query('DELETE FROM messageinterne WHERE idExp_Pers = ?', [idPers]);
+    await conn.query('DELETE FROM MessageInterne WHERE idExp_Pers = ?', [idPers]);
     
     // 4. Supprimer de Parents
     await conn.query('DELETE FROM Parents WHERE idPers = ?', [idPers]);

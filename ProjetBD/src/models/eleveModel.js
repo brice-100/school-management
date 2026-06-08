@@ -230,7 +230,7 @@ const hardRemove = async (matricule) => {
     await conn.query('DELETE FROM Frequente WHERE matricule = ?', [matricule]);
     await conn.query('DELETE FROM Evaluation WHERE matricule = ?', [matricule]);
     await conn.query('DELETE FROM Paiement WHERE matricule = ?', [matricule]);
-    await conn.query('DELETE FROM messageinterne WHERE matricule_eleve = ?', [matricule]);
+    await conn.query('DELETE FROM MessageInterne WHERE matricule_eleve = ?', [matricule]);
     await conn.query('DELETE FROM Rapport WHERE matricule = ?', [matricule]);
     
     const [result] = await conn.query('DELETE FROM Eleve WHERE matricule = ?', [matricule]);

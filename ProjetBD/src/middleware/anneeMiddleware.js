@@ -15,13 +15,8 @@ const injectAnnee = async (req, res, next) => {
       const [rows] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
       idAnnee = rows[0] ? rows[0].idAnnee : 1;
     } catch (err1) {
-      try {
-        const [rows] = await pool.query('SELECT idAnnee FROM anneeacademique WHERE est_active = 1 LIMIT 1');
-        idAnnee = rows[0] ? rows[0].idAnnee : 1;
-      } catch (err2) {
-        console.error('Erreur anneeMiddleware:', err1.message, '|', err2.message);
-        idAnnee = 1;
-      }
+      console.error('Erreur anneeMiddleware:', err1.message);
+      idAnnee = 1;
     }
   }
 
