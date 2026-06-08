@@ -22,18 +22,33 @@ async function runSql(pool, sql, label) {
   }
 }
 
+async function resolveTableName(pool, dbName, table) {
+  const [rows] = await pool.query(
+    `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = ? AND LOWER(TABLE_NAME) = LOWER(?) LIMIT 1`,
+    [dbName, table]
+  );
+  return rows[0] ? rows[0].TABLE_NAME : null;
+}
+
 async function addColumnIfMissing(pool, table, column, definition, label) {
   const dbName = process.env.DB_NAME;
+  const actualTable = await resolveTableName(pool, dbName, table);
+  if (!actualTable) {
+    console.log(`ℹ️  Table ${table} introuvable, ${label} ignorée`);
+    return;
+  }
+
   const [rows] = await pool.query(
     `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
-    [dbName, table, column]
+    [dbName, actualTable, column]
   );
   if (rows[0].cnt > 0) {
     console.log(`ℹ️  ${label} (déjà appliqué)`);
     return;
   }
-  await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+  await pool.query(`ALTER TABLE \`${actualTable}\` ADD COLUMN \`${column}\` ${definition}`);
   console.log(`✅ ${label}`);
 }
 
@@ -52,25 +67,31 @@ async function fixAutoIncrements(pool) {
   await pool.query('SET FOREIGN_KEY_CHECKS = 0');
   for (const [table, col] of tables) {
     try {
+      const actualTable = await resolveTableName(pool, process.env.DB_NAME, table);
+      if (!actualTable) {
+        console.log(`ℹ️  Table ${table} introuvable, ignorée`);
+        continue;
+      }
+
       // Récupère le type actuel de la colonne
       const [rows] = await pool.query(
         `SELECT COLUMN_TYPE, EXTRA FROM INFORMATION_SCHEMA.COLUMNS
          WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
-        [process.env.DB_NAME, table, col]
+        [process.env.DB_NAME, actualTable, col]
       );
       if (!rows.length) {
-        console.log(`ℹ️  Table ${table} introuvable, ignorée`);
+        console.log(`ℹ️  Colonne ${col} introuvable sur ${actualTable}, ignorée`);
         continue;
       }
       if (rows[0].EXTRA.includes('auto_increment')) {
-        console.log(`ℹ️  ${table}.${col} AUTO_INCREMENT déjà présent`);
+        console.log(`ℹ️  ${actualTable}.${col} AUTO_INCREMENT déjà présent`);
         continue;
       }
       const colType = rows[0].COLUMN_TYPE;
       await pool.query(
-        `ALTER TABLE \`${table}\` MODIFY \`${col}\` ${colType} NOT NULL AUTO_INCREMENT`
+        `ALTER TABLE \`${actualTable}\` MODIFY \`${col}\` ${colType} NOT NULL AUTO_INCREMENT`
       );
-      console.log(`✅ AUTO_INCREMENT ajouté sur ${table}.${col}`);
+      console.log(`✅ AUTO_INCREMENT ajouté sur ${actualTable}.${col}`);
     } catch (err) {
       console.log(`ℹ️  ${table}.${col} → ${err.message}`);
     }
@@ -199,10 +220,11 @@ async function runMigrations() {
     `, 'Peuplement teacher_matieres');
 
     // ─── 5. Migration matricule INT → VARCHAR(50) ─────────────────
+    const actualEleveTable = await resolveTableName(pool, process.env.DB_NAME, 'Eleve');
     const [eleveMatCol] = await pool.query(
       `SELECT DATA_TYPE FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'Eleve' AND COLUMN_NAME = 'matricule'`,
-      [process.env.DB_NAME]
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'matricule'`,
+      [process.env.DB_NAME, actualEleveTable || 'Eleve']
     );
     const currentType = eleveMatCol[0]?.DATA_TYPE?.toLowerCase() || '';
 
@@ -217,14 +239,16 @@ async function runMigrations() {
         { table: 'Rapport',    fk: 'enfant' },
       ];
       for (const { table, fk } of fksToDrop) {
+        const actualTable = await resolveTableName(pool, process.env.DB_NAME, table) || table;
         try {
-          await pool.query(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`${fk}\``);
+          await pool.query(`ALTER TABLE \`${actualTable}\` DROP FOREIGN KEY \`${fk}\``);
         } catch { /* FK peut ne pas exister */ }
       }
       for (const table of ['Eleve', 'Evaluation', 'Frequente', 'Paiement', 'Parents', 'Rapport']) {
+        const actualTable = await resolveTableName(pool, process.env.DB_NAME, table) || table;
         await runSql(pool,
-          `ALTER TABLE \`${table}\` MODIFY matricule VARCHAR(50) NOT NULL`,
-          `Matricule VARCHAR(50) sur ${table}`);
+          `ALTER TABLE \`${actualTable}\` MODIFY matricule VARCHAR(50) NOT NULL`,
+          `Matricule VARCHAR(50) sur ${actualTable}`);
       }
       const fksToCreate = [
         { table: 'Evaluation', fk: 'matr',   ref: 'Eleve', col: 'matricule' },
@@ -234,13 +258,15 @@ async function runMigrations() {
         { table: 'Rapport',    fk: 'enfant', ref: 'Eleve', col: 'matricule' },
       ];
       for (const { table, fk, ref, col } of fksToCreate) {
+        const actualTable = await resolveTableName(pool, process.env.DB_NAME, table) || table;
+        const actualRef = await resolveTableName(pool, process.env.DB_NAME, ref) || ref;
         try {
           await pool.query(
-            `ALTER TABLE \`${table}\` ADD CONSTRAINT \`${fk}\`
-             FOREIGN KEY (\`matricule\`) REFERENCES \`${ref}\`(\`${col}\`)
+            `ALTER TABLE \`${actualTable}\` ADD CONSTRAINT \`${fk}\`
+             FOREIGN KEY (\`matricule\`) REFERENCES \`${actualRef}\`(\`${col}\`)
              ON DELETE NO ACTION ON UPDATE CASCADE`
           );
-          console.log(`✅ FK ${fk} recrée sur ${table}`);
+          console.log(`✅ FK ${fk} recrée sur ${actualTable}`);
         } catch (e) {
           console.log(`ℹ️  FK ${fk} non recrée : ${e.message}`);
         }
