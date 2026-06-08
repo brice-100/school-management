@@ -12,7 +12,7 @@ const injectAnnee = async (req, res, next) => {
   } else {
     // 2. Sinon, on cherche l'année active dans la BD
     try {
-      const [rows] = await pool.query('SELECT idAnnee FROM anneecademique WHERE est_active = 1 LIMIT 1');
+      const [rows] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
       idAnnee = rows[0] ? rows[0].idAnnee : 1;
     } catch (err) {
       console.error('Erreur anneeMiddleware:', err.message);
