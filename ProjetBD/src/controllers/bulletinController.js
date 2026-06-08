@@ -51,15 +51,26 @@ const getBulletinData = asyncHandler(async (req, res) => {
     ORDER BY t.idTrimes ASC
   `, [annee_scolaire]);
 
-  // Si pas de trimestres pour cette année, essayer par libelle contenant le numéro
   let idTrimes = null;
+  if (trimestres.length === 0) {
+    // Si l'année scolaire n'est pas exactement formatée, essayer une recherche plus souple.
+    const [fallbackTrimestres] = await pool.query(`
+      SELECT t.idTrimes, t.libelle
+      FROM Trimestre t
+      JOIN AnneeAcademique aa ON t.idAca = aa.idAnnee
+      WHERE aa.libelle LIKE CONCAT('%', ?, '%')
+      ORDER BY t.idTrimes ASC
+    `, [annee_scolaire]);
+    if (fallbackTrimestres.length > 0) {
+      trimestres.push(...fallbackTrimestres);
+    }
+  }
+
   if (trimestres.length > 0) {
-    // Prendre le Nième trimestre (index trimestreNum - 1)
     const idx = trimestreNum - 1;
     if (trimestres[idx]) {
       idTrimes = trimestres[idx].idTrimes;
     } else {
-      // Fallback : prendre le dernier disponible
       idTrimes = trimestres[trimestres.length - 1].idTrimes;
     }
   }

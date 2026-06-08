@@ -24,6 +24,8 @@ export default function BulletinPage() {
   const [bulletin,   setBulletin]   = useState(null)
   const [loading,    setLoading]    = useState(false)
 
+  const yearOptions = annees?.length ? annees : (selectedYear ? [selectedYear] : [])
+
   useEffect(() => {
     if (selectedYear) {
       setAnnee(selectedYear.libelle)
@@ -174,7 +176,12 @@ export default function BulletinPage() {
               <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Année</label>
               <select value={annee} onChange={e => setAnnee(e.target.value)}
                 className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                {annees?.map(a => <option key={a.idAnnee} value={a.libelle}>{a.libelle}</option>)}
+                <option value="">— Choisir une année —</option>
+                {yearOptions.length > 0 ? (
+                  yearOptions.map(a => <option key={a.idAnnee} value={a.libelle}>{a.libelle}</option>)
+                ) : (
+                  <option value="" disabled>Aucune année disponible</option>
+                )}
               </select>
             </div>
           </div>

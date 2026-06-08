@@ -122,7 +122,36 @@ router.get('/form-data', asyncHandler(async (req, res) => {
  */
 router.post('/', asyncHandler(async (req, res) => {
   const { student_id, matiere_id, valeur, commentaire, trimestre, idAnnee } = req.body;
-  
+  const idAnneeResolved = idAnnee || req.idAnnee || 1;
+
+  // Résoudre l'ID de session quand le frontend ne fournit que le trimestre ordinal.
+  let idSession = req.body.idSession ? parseInt(req.body.idSession, 10) : null;
+  const trimestreOrdre = trimestre ? parseInt(trimestre, 10) : null;
+  if (!idSession && trimestreOrdre) {
+    const [trimestres] = await pool.query(
+      `SELECT t.idTrimes
+       FROM Trimestre t
+       WHERE t.idAca = ?
+       ORDER BY t.idTrimes ASC
+       LIMIT 1 OFFSET ?`,
+      [idAnneeResolved, Math.max(0, trimestreOrdre - 1)]
+    );
+
+    if (trimestres[0]) {
+      const [sessions] = await pool.query(
+        `SELECT s.idSession
+         FROM Session s
+         WHERE s.idTrimestre = ?
+         ORDER BY s.idSession ASC
+         LIMIT 1`,
+        [trimestres[0].idTrimes]
+      );
+      if (sessions[0]) {
+        idSession = sessions[0].idSession;
+      }
+    }
+  }
+
   // Mapping vers evaluation
   const data = {
     note: valeur,
@@ -130,8 +159,8 @@ router.post('/', asyncHandler(async (req, res) => {
     matricule: student_id,
     idCours: matiere_id,
     idPers: req.user.id,
-    idSession: req.body.idSession || trimestre || 1,
-    idAnnee: idAnnee || req.idAnnee || 1,
+    idSession: idSession || 1,
+    idAnnee: idAnneeResolved,
   };
 
   const idEval = await evaluationModel.create(data);
