@@ -3,18 +3,35 @@ const pool = require('../config/db');
 
 /**
  * GET /api/bulletins/:id?trimestre=1&annee_scolaire=2024-2025
- * 
- * CORRECTIF : Le frontend envoie trimestre=1,2 ou 3 (numéro ordinal).
- * La DB stocke Trimestre.idTrimes qui est un ID auto-incrémenté (ex: 5,6,7).
- * On filtre donc par l'ordre du trimestre dans l'année (1er, 2e, 3e trimestre
- * de l'année scolaire donnée), pas par l'ID brut.
  */
 const getBulletinData = asyncHandler(async (req, res) => {
   const matricule      = req.params.id;
   const trimestreNum   = parseInt(req.query.trimestre) || 1;   // 1, 2 ou 3
-  const annee_scolaire = req.query.annee_scolaire || '2024-2025';
+  const idAnneeContext = req.idAnnee || 1; // Injecté par anneeMiddleware
 
-  // 1. Infos élève
+  // 1. Trouver l'idTrimes correct et le libellé de l'année
+  const [trimestres] = await pool.query(`
+    SELECT t.idTrimes, t.libelle, aa.libelle as annee_libelle
+    FROM Trimestre t
+    JOIN AnneeAcademique aa ON t.idAca = aa.idAnnee
+    WHERE aa.idAnnee = ?
+    ORDER BY t.idTrimes ASC
+  `, [idAnneeContext]);
+
+  let idTrimes = null;
+  let annee_scolaire = req.query.annee_scolaire || '2024-2025';
+
+  if (trimestres.length > 0) {
+    annee_scolaire = trimestres[0].annee_libelle; // Toujours utiliser le vrai libellé de la DB
+    const idx = trimestreNum - 1;
+    if (trimestres[idx]) {
+      idTrimes = trimestres[idx].idTrimes;
+    } else {
+      idTrimes = trimestres[trimestres.length - 1].idTrimes;
+    }
+  }
+
+  // 2. Infos élève synchronisées avec l'année
   const [students] = await pool.query(`
     SELECT 
       e.matricule, e.nom, e.prenom, e.photoURL AS photo,
@@ -23,57 +40,23 @@ const getBulletinData = asyncHandler(async (req, res) => {
       p.nom AS parent_nom, p.prenom AS parent_prenom,
       p.mobile AS telephone, p.photo AS parent_photo,
       p_tit.nom AS enseignant_nom, p_tit.prenom AS enseignant_prenom,
-      (SELECT COUNT(*) FROM Frequente f2 WHERE f2.idSalle = f.idSalle) AS effectif
+      (SELECT COUNT(*) FROM Frequente f2 WHERE f2.idSalle = f.idSalle AND f2.idAcademi = ?) AS effectif
     FROM Eleve e
-    LEFT JOIN Frequente f  ON f.matricule = e.matricule
+    LEFT JOIN Frequente f  ON f.matricule = e.matricule AND f.idAcademi = ?
     LEFT JOIN Salle s      ON s.idSalle = f.idSalle
     LEFT JOIN Classe c     ON c.idClasse = s.idClasse
     LEFT JOIN Parents pr   ON pr.matricule = e.matricule
     LEFT JOIN Personne p   ON p.idPers = pr.idPers
-    LEFT JOIN Titulaire t  ON t.idSalle = s.idSalle AND t.actif = 1
+    LEFT JOIN Titulaire t  ON t.idSalle = s.idSalle AND t.idAnnee = ? AND t.actif = 1
     LEFT JOIN Personne p_tit ON p_tit.idPers = t.idPers
     WHERE e.matricule = ?
     LIMIT 1
-  `, [matricule]);
+  `, [idAnneeContext, idAnneeContext, idAnneeContext, matricule]);
 
   if (students.length === 0) {
     return res.status(404).json({ message: 'Élève introuvable' });
   }
   const student = students[0];
-
-  // 2. Trouver l'idTrimes correct : le Nième trimestre de l'année scolaire
-  //    (classé par idTrimes ASC pour avoir l'ordre chronologique)
-  const [trimestres] = await pool.query(`
-    SELECT t.idTrimes, t.libelle
-    FROM Trimestre t
-    JOIN AnneeAcademique aa ON t.idAca = aa.idAnnee
-    WHERE aa.libelle = ?
-    ORDER BY t.idTrimes ASC
-  `, [annee_scolaire]);
-
-  let idTrimes = null;
-  if (trimestres.length === 0) {
-    // Si l'année scolaire n'est pas exactement formatée, essayer une recherche plus souple.
-    const [fallbackTrimestres] = await pool.query(`
-      SELECT t.idTrimes, t.libelle
-      FROM Trimestre t
-      JOIN AnneeAcademique aa ON t.idAca = aa.idAnnee
-      WHERE aa.libelle LIKE CONCAT('%', ?, '%')
-      ORDER BY t.idTrimes ASC
-    `, [annee_scolaire]);
-    if (fallbackTrimestres.length > 0) {
-      trimestres.push(...fallbackTrimestres);
-    }
-  }
-
-  if (trimestres.length > 0) {
-    const idx = trimestreNum - 1;
-    if (trimestres[idx]) {
-      idTrimes = trimestres[idx].idTrimes;
-    } else {
-      idTrimes = trimestres[trimestres.length - 1].idTrimes;
-    }
-  }
 
   // 3. Évaluations groupées par matière
   let groupedNotes = [];
@@ -114,13 +97,11 @@ const getBulletinData = asyncHandler(async (req, res) => {
       const m = map.get(row.idCours);
       m.all_notes.push(row.valeur);
       
-      // Attribution heuristique si pas d'étiquette précise
       const lib = row.epreuve_nom.toLowerCase();
       if (lib.includes('seq1') || lib.includes('séquence 1')) m.seq1 = row.valeur;
       else if (lib.includes('seq2') || lib.includes('séquence 2')) m.seq2 = row.valeur;
       else if (lib.includes('comp') || lib.includes('exam')) m.comp = row.valeur;
       else {
-        // Fallback par ordre d'arrivée
         if (m.seq1 === null) m.seq1 = row.valeur;
         else if (m.seq2 === null) m.seq2 = row.valeur;
         else if (m.comp === null) m.comp = row.valeur;
@@ -154,7 +135,7 @@ const getBulletinData = asyncHandler(async (req, res) => {
     return 'Insuffisant';
   }
 
-  // 5. Statistiques de classe
+  // 5. Statistiques de classe synchronisées
   let classStats = {
     moyenneMax: '0.00',
     moyenneMin: '0.00',
@@ -163,23 +144,22 @@ const getBulletinData = asyncHandler(async (req, res) => {
     rang: '—'
   };
 
-  const [classSalles] = await pool.query('SELECT idSalle FROM Frequente WHERE matricule = ?', [matricule]);
-  if (classSalles.length > 0) {
+  const [classSalles] = await pool.query('SELECT idSalle FROM Frequente WHERE matricule = ? AND idAcademi = ? LIMIT 1', [matricule, idAnneeContext]);
+  if (classSalles.length > 0 && idTrimes) {
     const idSalle = classSalles[0].idSalle;
-    // Récupérer toutes les moyennes des élèves de la classe pour ce trimestre
     const [allMoyennes] = await pool.query(`
       SELECT 
         e.matricule,
         SUM(ev.note * c.coefficient) / SUM(c.coefficient) as moyenne
       FROM Eleve e
-      JOIN Frequente f ON e.matricule = f.matricule
+      JOIN Frequente f ON e.matricule = f.matricule AND f.idAcademi = ?
       JOIN Evaluation ev ON e.matricule = ev.matricule
       JOIN Cours c ON ev.idCours = c.idCours
       JOIN Session s ON ev.idSession = s.idSession
       WHERE f.idSalle = ? AND s.idTrimestre = ? AND ev.valider = 1
       GROUP BY e.matricule
       ORDER BY moyenne DESC
-    `, [idSalle, idTrimes]);
+    `, [idAnneeContext, idSalle, idTrimes]);
 
     if (allMoyennes.length > 0) {
       const moys = allMoyennes.map(m => parseFloat(m.moyenne));
@@ -193,61 +173,50 @@ const getBulletinData = asyncHandler(async (req, res) => {
     }
   }
 
-  // 6. Calcul dynamique Conduite (depuis table rapport) & Travail
-  const [anneeRows] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE libelle = ?', [annee_scolaire]);
-  const idAnnee = anneeRows[0] ? anneeRows[0].idAnnee : null;
-
+  // 6. Calcul dynamique Conduite
   let absencesTotales = 0;
   let absencesNJ = 0;
   let exclusions = 0;
   let hasAvertissementConduite = false;
   let hasBlameConduite = false;
 
-  if (idAnnee) {
-    const [reports] = await pool.query(`
-      SELECT r.*,
-        (SELECT COUNT(*) FROM justificatifs j WHERE j.idRapport = r.idRap AND j.idDirecteur IS NOT NULL) > 0 AS justifie
-      FROM rapport r
-      WHERE r.matricule = ? AND r.idAca = ?
-    `, [matricule, idAnnee]);
+  const [reports] = await pool.query(`
+    SELECT r.*,
+      (SELECT COUNT(*) FROM justificatifs j WHERE j.idRapport = r.idRap AND j.idDirecteur IS NOT NULL) > 0 AS justifie
+    FROM rapport r
+    WHERE r.matricule = ? AND r.idAca = ?
+  `, [matricule, idAnneeContext]);
 
-    const trimesterReports = reports.filter(r => {
-      if (!r.event_date) return false;
-      const date = new Date(r.event_date);
-      const month = date.getMonth() + 1; // 1-12
+  const trimesterReports = reports.filter(r => {
+    if (!r.event_date) return false;
+    const date = new Date(r.event_date);
+    const month = date.getMonth() + 1; // 1-12
 
-      if (trimestreNum === 1) {
-        return month >= 9 && month <= 12;
-      } else if (trimestreNum === 2) {
-        return month >= 1 && month <= 3;
-      } else {
-        return month >= 4 && month <= 8;
-      }
-    });
+    if (trimestreNum === 1) return month >= 9 && month <= 12;
+    else if (trimestreNum === 2) return month >= 1 && month <= 3;
+    else return month >= 4 && month <= 8;
+  });
 
-    trimesterReports.forEach(r => {
-      const lib = r.libelle.toLowerCase();
-      if (lib.includes('absence') || lib.includes('absent')) {
-        const hoursMatch = lib.match(/(\d+)\s*h/);
-        const hours = hoursMatch ? parseInt(hoursMatch[1]) : 2;
-        absencesTotales += hours;
-        if (!r.justifie) {
-          absencesNJ += hours;
-        }
-      }
-      if (lib.includes('exclusion') || lib.includes('exclu')) {
-        const daysMatch = lib.match(/(\d+)\s*(j|jour)/);
-        const days = daysMatch ? parseInt(daysMatch[1]) : 1;
-        exclusions += days;
-      }
-      if (lib.includes('avertissement') || lib.includes('conduite') || r.points >= 5) {
-        hasAvertissementConduite = true;
-      }
-      if (lib.includes('blâme') || lib.includes('blame') || r.points >= 10) {
-        hasBlameConduite = true;
-      }
-    });
-  }
+  trimesterReports.forEach(r => {
+    const lib = r.libelle.toLowerCase();
+    if (lib.includes('absence') || lib.includes('absent')) {
+      const hoursMatch = lib.match(/(\d+)\s*h/);
+      const hours = hoursMatch ? parseInt(hoursMatch[1]) : 2;
+      absencesTotales += hours;
+      if (!r.justifie) absencesNJ += hours;
+    }
+    if (lib.includes('exclusion') || lib.includes('exclu')) {
+      const daysMatch = lib.match(/(\d+)\s*(j|jour)/);
+      const days = daysMatch ? parseInt(daysMatch[1]) : 1;
+      exclusions += days;
+    }
+    if (lib.includes('avertissement') || lib.includes('conduite') || r.points >= 5) {
+      hasAvertissementConduite = true;
+    }
+    if (lib.includes('blâme') || lib.includes('blame') || r.points >= 10) {
+      hasBlameConduite = true;
+    }
+  });
 
   return res.status(200).json({
     data: {
