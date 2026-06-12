@@ -51,34 +51,32 @@ export default function Login() {
       // Réinitialiser les tentatives après succès
       setAttempts(0)
       setLockedUntil(null)
-      toast.success(`Bienvenue, ${user.prenom} !`, { duration: 2000 })
+      toast.success(`Bienvenue, ${user?.prenom || user?.nom || ''} !`, { duration: 2000 })
       navigate('/dashboard', { replace: true })
 
     } catch (err) {
       const newAttempts = attempts + 1
       setAttempts(newAttempts)
 
-      if (err.code === 'PENDING') {
+      if (err?.code === 'PENDING') {
         setError("Votre compte est en attente de validation par l'administrateur.")
-      } else if (err.code === 'SUSPENDED') {
+      } else if (err?.code === 'SUSPENDED') {
         setError("Votre compte est suspendu. Contactez l'administrateur.")
       } else if (newAttempts >= MAX_ATTEMPTS) {
         // Verrouillage 30 minutes
         setLockedUntil(Date.now() + LOCKOUT_MS)
         setError(
-          `Compte temporairement bloqué après ${MAX_ATTEMPTS} tentatives échouées. ` +
-          `Réessayez dans 30 minutes.`
+          `Compte temporairement bloqué après ${MAX_ATTEMPTS} tentatives échouées. Réessayez dans 30 minutes.`
         )
       } else {
-        setError(
-          `${err.message || 'Identifiant ou mot de passe incorrect.'} ` +
-          `(${attemptsLeft - 1} tentative${attemptsLeft - 1 > 1 ? 's' : ''} restante${attemptsLeft - 1 > 1 ? 's' : ''})`
-        )
+        const left = MAX_ATTEMPTS - newAttempts;
+        const msg = err?.message || 'Identifiant ou mot de passe incorrect.';
+        setError(`${msg} (${left} tentative${left > 1 ? 's' : ''} restante${left > 1 ? 's' : ''})`)
       }
     } finally {
       setLoading(false)
     }
-  }, [form, attempts, isLocked, login, navigate, attemptsLeft])
+  }, [form, attempts, isLocked, login, navigate]) // Retrait de attemptsLeft des dépendances pour éviter les closures trompeuses
 
   return (
     <div className="min-h-screen flex">
@@ -151,7 +149,7 @@ export default function Login() {
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-left">
                 <p className="text-red-700 text-sm">
                   Si vous avez oublié votre mot de passe, contactez
-                  l'administrateur de l'école.
+                  l&apos;administrateur de l&apos;école.
                 </p>
               </div>
               <button
@@ -180,7 +178,7 @@ export default function Login() {
               {/* Indicateur tentatives */}
               {attempts > 0 && attempts < MAX_ATTEMPTS && (
                 <div className="flex items-center gap-2 mb-4">
-                  {[...Array(MAX_ATTEMPTS)].map((_, i) => (
+                  {Array.from({ length: MAX_ATTEMPTS }).map((_, i) => (
                     <div key={i}
                       className={`h-1.5 flex-1 rounded-full transition-colors ${
                         i < attempts ? 'bg-red-400' : 'bg-gray-200'
@@ -240,20 +238,20 @@ export default function Login() {
                     </button>
                   </div>
                 </div>
-<div>
-  <label className="form-label">Type d'utilisateur</label>
-  <select 
-    name="userType" 
-    value={form.userType} 
-    onChange={handleChange} 
-    className="input-field"
-  >
-    <option value="super_admin">Super Administrateur</option>
-    <option value="directeur">Directeur</option>
-    <option value="teacher">Enseignant</option>
-    <option value="parent">Parent</option>
-  </select>
-</div>
+                <div>
+                  <label className="form-label">Type d'utilisateur</label>
+                  <select 
+                    name="userType" 
+                    value={form.userType} 
+                    onChange={handleChange} 
+                    className="input-field"
+                  >
+                    <option value="super_admin">Super Administrateur</option>
+                    <option value="directeur">Directeur</option>
+                    <option value="teacher">Enseignant</option>
+                    <option value="parent">Parent</option>
+                  </select>
+                </div>
                 <button
                   type="submit"
                   disabled={loading || isLocked}
