@@ -2,22 +2,23 @@ openapi: 3.0.3
 info:
   title: School Management API
   description: |
-    API REST pour la gestion des écoles primaires.
+    API REST pour la gestion d'école (Administration, Enseignants, Parents, Scolarité).
     
-    **Rôles disponibles :**
-    - `0` root  
-    - `1` Admin  
-    - `2` Fondateur  
-    - `3` Directeur  
-    - `1` Enseignant (typePersonne)  
-    - `2` Administratif  
-    - `3` Scolarité  
-    - `4` Parent
+    **Rôles (typePersonne) :**
+    - `0` Root
+    - `1` Admin
+    - `2` Fondateur
+    - `3` Directeur
+    - `teacher` / `1` Enseignant
+    - `parent` / `4` Parent
+    - `scolarite` Scolarité
   version: 1.0.0
 
 servers:
   - url: http://localhost:5000/api
-    description: Serveur de développement
+    description: Serveur Local
+  - url: https://projetbd-production.up.railway.app/api
+    description: Serveur de Production (Railway)
 
 components:
   securitySchemes:
@@ -32,12 +33,47 @@ components:
       properties:
         message:
           type: string
+          example: "Une erreur est survenue"
 
     Success:
       type: object
       properties:
         message:
           type: string
+          example: "Opération réussie"
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+        - userType
+      properties:
+        username:
+          type: string
+          example: "admin"
+        password:
+          type: string
+          example: "password123"
+        userType:
+          type: string
+          enum: [admin, teacher, parent, personne]
+
+    Eleve:
+      type: object
+      properties:
+        matricule:
+          type: string
+        nom:
+          type: string
+        prenom:
+          type: string
+        dateNaissance:
+          type: string
+          format: date
+        actif:
+          type: integer
+          enum: [0, 1]
 
 security:
   - bearerAuth: []
@@ -61,4 +97,239 @@ paths:
                     example: OK
                   timestamp:
                     type: string
-                    format: date-time
+
+  /auth/login:
+    post:
+      tags: [Authentification]
+      summary: Connexion utilisateur
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Connexion réussie, retourne le token JWT
+
+  /auth/me:
+    get:
+      tags: [Authentification]
+      summary: Obtenir le profil de l'utilisateur connecté
+      responses:
+        '200':
+          description: Profil utilisateur
+
+  /eleves:
+    get:
+      tags: [Élèves]
+      summary: Liste tous les élèves
+      parameters:
+        - name: actif
+          in: query
+          schema:
+            type: integer
+            enum: [0, 1]
+        - name: idAnnee
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Liste des élèves
+    post:
+      tags: [Élèves]
+      summary: Ajouter un nouvel élève
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                nom:
+                  type: string
+                prenom:
+                  type: string
+                dateNaissance:
+                  type: string
+                  format: date
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Élève créé
+
+  /eleves/{matricule}:
+    get:
+      tags: [Élèves]
+      summary: Obtenir les détails d'un élève
+      parameters:
+        - name: matricule
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Détails de l'élève
+    put:
+      tags: [Élèves]
+      summary: Mettre à jour un élève
+      parameters:
+        - name: matricule
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Élève mis à jour
+    delete:
+      tags: [Élèves]
+      summary: Supprimer un élève logiquement
+      parameters:
+        - name: matricule
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Élève supprimé
+
+  /eleves/{matricule}/fiche:
+    get:
+      tags: [Élèves]
+      summary: Obtenir la fiche complète d'un élève (notes, paiements, absences)
+      parameters:
+        - name: matricule
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Fiche complète
+
+  /enseignants:
+    get:
+      tags: [Enseignants]
+      summary: Liste tous les enseignants
+      responses:
+        '200':
+          description: Liste des enseignants
+    post:
+      tags: [Enseignants]
+      summary: Ajouter un enseignant
+      responses:
+        '201':
+          description: Enseignant créé
+
+  /enseignants/{idEnseignant}:
+    get:
+      tags: [Enseignants]
+      summary: Détails d'un enseignant
+      parameters:
+        - name: idEnseignant
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Détails de l'enseignant
+
+  /paiements:
+    get:
+      tags: [Paiements]
+      summary: Liste tous les paiements
+      responses:
+        '200':
+          description: Liste des paiements
+    post:
+      tags: [Paiements]
+      summary: Ajouter un paiement
+      responses:
+        '201':
+          description: Paiement créé
+
+  /paiements/{id}/valider:
+    patch:
+      tags: [Paiements]
+      summary: Valider un paiement en attente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paiement validé
+
+  /grades:
+    get:
+      tags: [Notes et Évaluations]
+      summary: Liste des notes
+      parameters:
+        - name: idAnnee
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Liste des notes
+    post:
+      tags: [Notes et Évaluations]
+      summary: Saisir une note
+      responses:
+        '201':
+          description: Note enregistrée
+
+  /planning:
+    get:
+      tags: [Planning]
+      summary: Obtenir l'emploi du temps
+      parameters:
+        - name: idAnnee
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Emploi du temps
+    post:
+      tags: [Planning]
+      summary: Ajouter un créneau à l'emploi du temps
+      responses:
+        '201':
+          description: Créneau ajouté
+
+  /stats/overview:
+    get:
+      tags: [Statistiques]
+      summary: Statistiques globales du tableau de bord
+      parameters:
+        - name: idAnnee
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Statistiques
+
+  /annees-academiques:
+    get:
+      tags: [Années Académiques]
+      summary: Liste les années académiques
+      responses:
+        '200':
+          description: Années académiques
+    post:
+      tags: [Années Académiques]
+      summary: Créer une nouvelle année
+      responses:
+        '201':
+          description: Année créée
