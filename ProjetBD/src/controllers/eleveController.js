@@ -74,8 +74,8 @@ const create = asyncHandler(async (req, res) => {
       const [res] = await pool.query('INSERT INTO Salle (libelle, surface, idClasse, actif, idAdmin, created_at) VALUES (?, ?, ?, 1, ?, NOW())', ['Salle Unique', 'NON DEFINIE', req.body.classe_id, data.idAdmin]);
       idSalle = res.insertId;
     }
-    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE statut = 1 LIMIT 1');
-    const idAcademi = annees.length > 0 ? annees[0].idAnnee : 1;
+    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
+    const idAcademi = annees.length > 0 ? annees[0].idAnnee : (req.body.idAnnee || 1);
     await pool.query('INSERT INTO Frequente (idSalle, idAcademi, matricule, idAdmin, created_at) VALUES (?, ?, ?, ?, NOW())', [idSalle, idAcademi, matricule, data.idAdmin]);
   }
 
@@ -119,8 +119,8 @@ const update = asyncHandler(async (req, res) => {
         const [res] = await pool.query('INSERT INTO Salle (libelle, surface, idClasse, actif, idAdmin, created_at) VALUES (?, ?, ?, 1, ?, NOW())', ['Salle Unique', 'NON DEFINIE', req.body.classe_id, req.user.id]);
         idSalle = res.insertId;
       }
-      const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE statut = 1 LIMIT 1');
-      const idAcademi = annees.length > 0 ? annees[0].idAnnee : 1;
+      const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
+      const idAcademi = annees.length > 0 ? annees[0].idAnnee : (req.body.idAnnee || 1);
       await pool.query('INSERT INTO Frequente (idSalle, idAcademi, matricule, idAdmin, created_at) VALUES (?, ?, ?, ?, NOW())', [idSalle, idAcademi, matricule, req.user.id]);
     }
   }

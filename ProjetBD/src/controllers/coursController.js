@@ -13,7 +13,8 @@ const getAll = asyncHandler(async (req, res) => {
 });
 
 const getMesCours = asyncHandler(async (req, res) => {
-  const cours = await coursModel.findMesCours(req.user.idPers);
+  const idAnnee = req.query.idAnnee ? parseInt(req.query.idAnnee) : null;
+  const cours = await coursModel.findMesCours(req.user.idPers, idAnnee);
   return res.status(200).json({ total: cours.length, data: cours });
 });
 
@@ -27,7 +28,7 @@ const create = asyncHandler(async (req, res) => {
   let idAnnee = req.body.idAnnee;
   if (!idAnnee) {
     const pool = require('../config/db');
-    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE statut = 1 LIMIT 1');
+    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
     idAnnee = annees.length > 0 ? annees[0].idAnnee : 1;
   }
   const data = { ...req.body, idAdmin: req.user.id, idAnnee };

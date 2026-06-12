@@ -21,8 +21,8 @@ const findAll = async (filters = {}) => {
   return rows;
 };
 
-const findMesCours = async (idPers) => {
-  const [rows] = await pool.query(`
+const findMesCours = async (idPers, idAnnee = null) => {
+  let query = `
     SELECT DISTINCT c.*, cl.libelle AS classe_nom
     FROM Cours c
     JOIN Enseignant e ON e.idPers = ?
@@ -36,8 +36,14 @@ const findMesCours = async (idPers) => {
           WHERE tm.teacher_id = e.idEnseignant
         )
       )
-    ORDER BY c.libelle ASC
-  `, [idPers]);
+  `;
+  const params = [idPers];
+  if (idAnnee) {
+    query += ' AND c.idAnnee = ?';
+    params.push(idAnnee);
+  }
+  query += ' ORDER BY c.libelle ASC';
+  const [rows] = await pool.query(query, params);
   return rows;
 };
 

@@ -54,7 +54,7 @@ const create = asyncHandler(async (req, res) => {
   
   let idAnnee = req.body.idAnnee;
   if (!idAnnee) {
-    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE statut = 1 LIMIT 1');
+    const [annees] = await pool.query('SELECT idAnnee FROM AnneeAcademique WHERE est_active = 1 LIMIT 1');
     idAnnee = annees.length > 0 ? annees[0].idAnnee : 1;
   }
 

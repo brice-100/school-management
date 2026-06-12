@@ -8,19 +8,44 @@ const pool = require('../config/db');
 const getOverview = asyncHandler(async (req, res) => {
   const idAnnee = req.query.idAnnee || null;
 
-  const [[{ totalEleves }]]     = await pool.query('SELECT COUNT(*) as totalEleves FROM Eleve WHERE actif = 1');
+  // Nombre d'élèves inscrits dans l'année sélectionnée
+  let elevesQuery = 'SELECT COUNT(DISTINCT e.matricule) as totalEleves FROM Eleve e';
+  const elevesParams = [];
+  if (idAnnee) {
+    elevesQuery += ' JOIN Frequente f ON e.matricule = f.matricule WHERE e.actif = 1 AND f.idAcademi = ?';
+    elevesParams.push(idAnnee);
+  } else {
+    elevesQuery += ' WHERE e.actif = 1';
+  }
+  const [[{ totalEleves }]] = await pool.query(elevesQuery, elevesParams);
+
   const [[{ totalEnseignants }]] = await pool.query(`SELECT COUNT(DISTINCT idPers) as totalEnseignants FROM Enseignant`);
   const [[{ totalClasses }]]    = await pool.query('SELECT COUNT(*) as totalClasses FROM Classe');
   const [[{ totalParents }]]    = await pool.query('SELECT COUNT(*) as totalParents FROM Personne WHERE typePersonne = 4');
   const [[{ pendingPersons }]]  = await pool.query('SELECT COUNT(*) as pendingPersons FROM Personne WHERE actif = 0');
 
-  let revenueQuery = 'SELECT COALESCE(SUM(montant), 0) as revenue FROM Paiement WHERE valide = 1';
+  let revenueQuery = 'SELECT COALESCE(SUM(montant), 0) as revenue FROM Paiement WHERE valide = 1 AND isDeleted = 0';
   const revenueParams = [];
   if (idAnnee) { revenueQuery += ' AND idAca = ?'; revenueParams.push(idAnnee); }
   const [[{ revenue }]] = await pool.query(revenueQuery, revenueParams);
 
-  const [[{ enAttente }]] = await pool.query('SELECT COUNT(*) as enAttente FROM Paiement WHERE valide = 0');
-  const [[{ totalEvaluations }]] = await pool.query('SELECT COUNT(*) as totalEvaluations FROM Evaluation');
+  // Paiements en attente filtrés par année
+  let attenteQuery = 'SELECT COUNT(*) as enAttente FROM Paiement WHERE valide = 0 AND isDeleted = 0';
+  const attenteParams = [];
+  if (idAnnee) { attenteQuery += ' AND idAca = ?'; attenteParams.push(idAnnee); }
+  const [[{ enAttente }]] = await pool.query(attenteQuery, attenteParams);
+
+  // Évaluations filtrées par année via Trimestre
+  let evalQuery = `
+    SELECT COUNT(DISTINCT ev.idEval) as totalEvaluations
+    FROM Evaluation ev
+    JOIN Session s ON ev.idSession = s.idSession
+    JOIN Trimestre t ON s.idTrimestre = t.idTrimes
+    WHERE ev.isDeleted = 0
+  `;
+  const evalParams = [];
+  if (idAnnee) { evalQuery += ' AND t.idAca = ?'; evalParams.push(idAnnee); }
+  const [[{ totalEvaluations }]] = await pool.query(evalQuery, evalParams);
 
   // Calcul dynamique du total attendu basé sur la table scolarite
   let attenduQuery = `
@@ -104,14 +129,20 @@ const getOverview = asyncHandler(async (req, res) => {
  * Moyenne des notes par classe
  */
 const getNotesByClasse = asyncHandler(async (req, res) => {
-  const [rows] = await pool.query(`
+  const idAnnee = req.query.idAnnee || null;
+  let query = `
     SELECT c.libelle as classe, ROUND(AVG(ev.note), 2) as moyenne, COUNT(ev.idEval) as total_notes
     FROM Evaluation ev
+    JOIN Session s ON ev.idSession = s.idSession
+    JOIN Trimestre t ON s.idTrimestre = t.idTrimes
     JOIN Cours co ON ev.idCours = co.idCours
     JOIN Classe c ON co.idClasse = c.idClasse
-    GROUP BY c.idClasse, c.libelle
-    ORDER BY moyenne DESC
-  `);
+    WHERE 1=1
+  `;
+  const params = [];
+  if (idAnnee) { query += ' AND t.idAca = ?'; params.push(idAnnee); }
+  query += ' GROUP BY c.idClasse, c.libelle ORDER BY moyenne DESC';
+  const [rows] = await pool.query(query, params);
   return res.status(200).json({ data: rows });
 });
 
@@ -120,14 +151,19 @@ const getNotesByClasse = asyncHandler(async (req, res) => {
  * Moyenne des notes par matière
  */
 const getNotesByMatiere = asyncHandler(async (req, res) => {
-  const [rows] = await pool.query(`
+  const idAnnee = req.query.idAnnee || null;
+  let query = `
     SELECT co.libelle as matiere, ROUND(AVG(ev.note), 2) as moyenne, COUNT(ev.idEval) as total_notes
     FROM Evaluation ev
+    JOIN Session s ON ev.idSession = s.idSession
+    JOIN Trimestre t ON s.idTrimestre = t.idTrimes
     JOIN Cours co ON ev.idCours = co.idCours
-    GROUP BY co.idCours, co.libelle
-    ORDER BY moyenne DESC
-    LIMIT 20
-  `);
+    WHERE 1=1
+  `;
+  const params = [];
+  if (idAnnee) { query += ' AND t.idAca = ?'; params.push(idAnnee); }
+  query += ' GROUP BY co.idCours, co.libelle ORDER BY moyenne DESC LIMIT 20';
+  const [rows] = await pool.query(query, params);
   return res.status(200).json({ data: rows });
 });
 
@@ -135,16 +171,19 @@ const getNotesByMatiere = asyncHandler(async (req, res) => {
  * GET /api/stats/payments-by-month
  */
 const getPaymentsByMonth = asyncHandler(async (req, res) => {
-  const [rows] = await pool.query(`
+  const idAnnee = req.query.idAnnee || null;
+  let query = `
     SELECT
       DATE_FORMAT(dateEnregistrer, '%M') as mois,
       SUM(montant) as paye,
       SUM(montant) as attendu
     FROM Paiement
-    WHERE valide = 1
-    GROUP BY DATE_FORMAT(dateEnregistrer, '%M'), MONTH(dateEnregistrer)
-    ORDER BY MONTH(dateEnregistrer)
-  `);
+    WHERE valide = 1 AND isDeleted = 0
+  `;
+  const params = [];
+  if (idAnnee) { query += ' AND idAca = ?'; params.push(idAnnee); }
+  query += ' GROUP BY DATE_FORMAT(dateEnregistrer, \'%M\'), MONTH(dateEnregistrer) ORDER BY MONTH(dateEnregistrer)';
+  const [rows] = await pool.query(query, params);
   return res.status(200).json({ data: rows });
 });
 
@@ -152,13 +191,18 @@ const getPaymentsByMonth = asyncHandler(async (req, res) => {
  * GET /api/stats/payments-by-statut
  */
 const getPaymentsByStatut = asyncHandler(async (req, res) => {
-  const [rows] = await pool.query(`
+  const idAnnee = req.query.idAnnee || null;
+  let query = `
     SELECT
       CASE WHEN valide = 1 THEN 'Validé' ELSE 'En attente' END as name,
       COUNT(*) as value
     FROM Paiement
-    GROUP BY valide
-  `);
+    WHERE isDeleted = 0
+  `;
+  const params = [];
+  if (idAnnee) { query += ' AND idAca = ?'; params.push(idAnnee); }
+  query += ' GROUP BY valide';
+  const [rows] = await pool.query(query, params);
   return res.status(200).json({ data: rows });
 });
 
@@ -166,16 +210,21 @@ const getPaymentsByStatut = asyncHandler(async (req, res) => {
  * GET /api/stats/reussite-by-trimestre
  */
 const getReussiteByTrimestre = asyncHandler(async (req, res) => {
-  const [rows] = await pool.query(`
+  const idAnnee = req.query.idAnnee || null;
+  let query = `
     SELECT
       s.libelle as trimestre,
       ROUND(AVG(ev.note), 2) as moyenne,
       ROUND(SUM(CASE WHEN ev.note >= 10 THEN 1 ELSE 0 END) * 100 / COUNT(*), 1) as taux
     FROM Evaluation ev
     JOIN Session s ON ev.idSession = s.idSession
-    GROUP BY s.idSession, s.libelle
-    ORDER BY s.idSession ASC
-  `);
+    JOIN Trimestre t ON s.idTrimestre = t.idTrimes
+    WHERE 1=1
+  `;
+  const params = [];
+  if (idAnnee) { query += ' AND t.idAca = ?'; params.push(idAnnee); }
+  query += ' GROUP BY s.idSession, s.libelle ORDER BY s.idSession ASC';
+  const [rows] = await pool.query(query, params);
   return res.status(200).json({ data: rows });
 });
 
