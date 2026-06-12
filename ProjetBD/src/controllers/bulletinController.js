@@ -47,11 +47,11 @@ const getBulletinData = asyncHandler(async (req, res) => {
     LEFT JOIN Classe c     ON c.idClasse = s.idClasse
     LEFT JOIN Parents pr   ON pr.matricule = e.matricule
     LEFT JOIN Personne p   ON p.idPers = pr.idPers
-    LEFT JOIN Titulaire t  ON t.idSalle = s.idSalle AND t.idAnnee = ? AND t.actif = 1
+    LEFT JOIN Titulaire t  ON t.idSalle = s.idSalle AND t.actif = 1
     LEFT JOIN Personne p_tit ON p_tit.idPers = t.idPers
     WHERE e.matricule = ?
     LIMIT 1
-  `, [idAnneeContext, idAnneeContext, idAnneeContext, matricule]);
+  `, [idAnneeContext, idAnneeContext, matricule]);
 
   if (students.length === 0) {
     return res.status(404).json({ message: 'Élève introuvable' });
