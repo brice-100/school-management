@@ -177,7 +177,7 @@ export default function Login() {
 
               {/* Indicateur tentatives */}
               {attempts > 0 && attempts < MAX_ATTEMPTS && (
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex items-center gap-2 mb-4" translate="no">
                   {Array.from({ length: MAX_ATTEMPTS }).map((_, i) => (
                     <div key={i}
                       className={`h-1.5 flex-1 rounded-full transition-colors ${
@@ -185,7 +185,7 @@ export default function Login() {
                       }`}
                     />
                   ))}
-                  <span className="text-xs text-red-500 shrink-0 font-medium">
+                  <span key={attemptsLeft} className="text-xs text-red-500 shrink-0 font-medium">
                     {attemptsLeft} essai{attemptsLeft > 1 ? 's' : ''}
                   </span>
                 </div>
@@ -193,10 +193,10 @@ export default function Login() {
 
               {/* Message erreur */}
               {error && (
-                <div className="flex items-start gap-2.5 bg-red-50 border border-red-200
+                <div translate="no" className="flex items-start gap-2.5 bg-red-50 border border-red-200
                   text-red-700 text-sm px-4 py-3 rounded-xl mb-5">
                   <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                  <span>{error}</span>
+                  <span key={error}>{error}</span>
                 </div>
               )}
 
