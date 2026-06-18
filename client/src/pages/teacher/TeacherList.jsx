@@ -98,9 +98,9 @@ export default function TeacherList() {
         />
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="w-full">
         {loading ? (
-          <div className="p-6 space-y-3">
+          <div className="card overflow-hidden p-6 space-y-3">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="flex items-center gap-4">
                 <div className="skeleton w-10 h-10 rounded-full" />
@@ -112,7 +112,7 @@ export default function TeacherList() {
             ))}
           </div>
         ) : teachers.length === 0 ? (
-          <div className="flex flex-col items-center py-14 text-center">
+          <div className="card overflow-hidden flex flex-col items-center py-14 text-center">
             <p className="text-gray-400 text-sm mb-3">
               {showArchives ? 'Aucun enseignant archivé.' : 'Aucun enseignant enregistré.'}
             </p>
@@ -123,108 +123,123 @@ export default function TeacherList() {
             )}
           </div>
         ) : (
-          <div className="table-responsive">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  {['Enseignant', 'Email', 'Téléphone', 'Classe', 'Matière', 'Actions'].map(h => (
-                    <th key={h} className="text-left font-medium text-gray-500 px-5 py-3.5 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-            <tbody className="divide-y divide-gray-50">
-              {teachers.map((t) => (
-                <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      {t.photo
-                        ? <img src={`${BASE}/${t.photo}`} className="w-9 h-9 rounded-full object-cover" alt="" />
-                        : <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-xs font-semibold">
-                            {t.prenom?.[0]}{t.nom?.[0]}
-                          </div>
-                      }
-                      <p className="font-medium text-gray-900">{t.prenom} {t.nom}</p>
-                      {(t.actif === 0 || t.person_actif === 0) && (
-                        <span className="badge bg-amber-50 text-amber-600 text-[10px] py-0.5 px-1.5 ml-2">À valider</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5 text-gray-600">{t.email || '—'}</td>
-                  <td className="px-5 py-3.5 text-gray-600">{t.telephone || '—'}</td>
-                  <td className="px-5 py-3.5">
-                    {t.classe_nom
-                      ? <span className="badge bg-purple-50 text-purple-700">{t.classe_nom}</span>
-                      : <span className="text-gray-400">—</span>
-                    }
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {(() => {
-                      // Support multi-matières
-                      const list = t.matieres && t.matieres.length > 0
-                        ? t.matieres
-                        : t.matiere_nom
-                          ? [{ libelle: t.matiere_nom }]
-                          : []
-                      if (list.length === 0) return <span className="text-gray-400">—</span>
-                      return (
-                        <div className="flex flex-wrap gap-1">
-                          {list.map((m, i) => (
-                            <span key={i} className="badge bg-amber-50 text-amber-700 text-[11px]">
-                              {m.libelle || m.nom}
-                            </span>
-                          ))}
-                        </div>
-                      )
-                    })()}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-1">
-                      {showArchives && isSuperAdmin ? (
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => handleRestore(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
-                            className="btn-secondary text-sm py-1 px-3"
-                          >
-                            Restaurer
-                          </button>
-                          <button
-                            onClick={() => handleHardDelete(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
-                            className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
-                            title="Supprimer définitivement"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      ) : (!showArchives) ? (
-                        <>
-                          <button
-                            onClick={() => setFicheId(t.idEnseignant || t.id)}
-                            className="btn-icon text-blue-500 hover:bg-blue-50"
-                            title="Voir la fiche"
-                          >
-                            <Eye size={15} />
-                          </button>
-                          <Link to={`/teachers/${t.idEnseignant || t.id}/edit`} className="btn-icon">
-                            <Pencil size={15} />
-                          </Link>
-                          {isSuperAdmin && (
-                            <button
-                              onClick={() => handleDelete(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
-                              className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
-                              title="Archiver"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          )}
-                        </>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          <div className="space-y-6">
+            {Object.entries(
+              teachers.reduce((acc, t) => {
+                const classe = t.classe_nom || 'Non assigné';
+                if (!acc[classe]) acc[classe] = [];
+                acc[classe].push(t);
+                return acc;
+              }, {})
+            ).sort(([a], [b]) => a === 'Non assigné' ? 1 : b === 'Non assigné' ? -1 : a.localeCompare(b)).map(([classe, classTeachers]) => (
+              <div key={classe} className="card overflow-hidden">
+                <div className="bg-gray-50/80 px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                    {classe}
+                  </h3>
+                  <span className="badge bg-white border border-gray-200 text-gray-600 shadow-sm">
+                    {classTeachers.length} enseignant{classTeachers.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="table-responsive">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        {['Enseignant', 'Email', 'Téléphone', 'Matière', 'Actions'].map(h => (
+                          <th key={h} className="text-left font-medium text-gray-500 px-5 py-3.5 whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {classTeachers.map((t) => (
+                        <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              {t.photo
+                                ? <img src={`${BASE}/${t.photo}`} className="w-9 h-9 rounded-full object-cover" alt="" />
+                                : <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-xs font-semibold">
+                                    {t.prenom?.[0]}{t.nom?.[0]}
+                                  </div>
+                              }
+                              <p className="font-medium text-gray-900">{t.prenom} {t.nom}</p>
+                              {(t.actif === 0 || t.person_actif === 0) && (
+                                <span className="badge bg-amber-50 text-amber-600 text-[10px] py-0.5 px-1.5 ml-2">À valider</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-gray-600">{t.email || '—'}</td>
+                          <td className="px-5 py-3.5 text-gray-600">{t.telephone || '—'}</td>
+                          <td className="px-5 py-3.5">
+                            {(() => {
+                              const list = t.matieres && t.matieres.length > 0
+                                ? t.matieres
+                                : t.matiere_nom
+                                  ? [{ libelle: t.matiere_nom }]
+                                  : []
+                              if (list.length === 0) return <span className="text-gray-400">—</span>
+                              return (
+                                <div className="flex flex-wrap gap-1">
+                                  {list.map((m, i) => (
+                                    <span key={i} className="badge bg-amber-50 text-amber-700 text-[11px]">
+                                      {m.libelle || m.nom}
+                                    </span>
+                                  ))}
+                                </div>
+                              )
+                            })()}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-1">
+                              {showArchives && isSuperAdmin ? (
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => handleRestore(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
+                                    className="btn-secondary text-sm py-1 px-3"
+                                  >
+                                    Restaurer
+                                  </button>
+                                  <button
+                                    onClick={() => handleHardDelete(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
+                                    className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
+                                    title="Supprimer définitivement"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              ) : (!showArchives) ? (
+                                <>
+                                  <button
+                                    onClick={() => setFicheId(t.idEnseignant || t.id)}
+                                    className="btn-icon text-blue-500 hover:bg-blue-50"
+                                    title="Voir la fiche"
+                                  >
+                                    <Eye size={15} />
+                                  </button>
+                                  <Link to={`/teachers/${t.idEnseignant || t.id}/edit`} className="btn-icon">
+                                    <Pencil size={15} />
+                                  </Link>
+                                  {isSuperAdmin && (
+                                    <button
+                                      onClick={() => handleDelete(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
+                                      className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
+                                      title="Archiver"
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  )}
+                                </>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
