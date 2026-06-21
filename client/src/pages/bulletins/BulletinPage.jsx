@@ -76,7 +76,7 @@ export default function BulletinPage() {
     if (studentId && annee) {
       handleLoad()
     }
-  }, [studentId, annee])
+  }, [studentId, annee, trimestre])
 
   const handleLoad = async () => {
     if (!studentId) return toast.error('Sélectionnez un élève.')
