@@ -69,7 +69,8 @@ const getBulletinData = asyncHandler(async (req, res) => {
         c.idCours,
         c.libelle AS matiere_nom,
         c.coefficient,
-        ep.libelle AS epreuve_nom
+        ep.libelle AS epreuve_nom,
+        s.libelle AS session_nom
       FROM Evaluation ev
       JOIN Cours c         ON ev.idCours = c.idCours
       JOIN Session s       ON ev.idSession = s.idSession
@@ -97,9 +98,9 @@ const getBulletinData = asyncHandler(async (req, res) => {
       const m = map.get(row.idCours);
       m.all_notes.push(row.valeur);
       
-      const lib = row.epreuve_nom.toLowerCase();
-      if (lib.includes('seq1') || lib.includes('séquence 1')) m.seq1 = row.valeur;
-      else if (lib.includes('seq2') || lib.includes('séquence 2')) m.seq2 = row.valeur;
+      const lib = row.session_nom ? row.session_nom.toLowerCase() : '';
+      if (lib.includes('seq1') || lib.includes('séquence 1') || lib.includes('sequence 1')) m.seq1 = row.valeur;
+      else if (lib.includes('seq2') || lib.includes('séquence 2') || lib.includes('sequence 2')) m.seq2 = row.valeur;
       else if (lib.includes('comp') || lib.includes('exam')) m.comp = row.valeur;
       else {
         if (m.seq1 === null) m.seq1 = row.valeur;
@@ -171,8 +172,8 @@ const getBulletinData = asyncHandler(async (req, res) => {
           e.idCours,
           c.coefficient,
           (
-            COALESCE(MAX(CASE WHEN LOWER(ep.libelle) LIKE '%seq1%' OR LOWER(ep.libelle) LIKE '%séquence 1%' THEN ev.note END), 0) +
-            COALESCE(MAX(CASE WHEN LOWER(ep.libelle) LIKE '%seq2%' OR LOWER(ep.libelle) LIKE '%séquence 2%' THEN ev.note END), 0)
+            COALESCE(MAX(CASE WHEN LOWER(s.libelle) LIKE '%seq1%' OR LOWER(s.libelle) LIKE '%séquence 1%' OR LOWER(s.libelle) LIKE '%sequence 1%' THEN ev.note END), 0) +
+            COALESCE(MAX(CASE WHEN LOWER(s.libelle) LIKE '%seq2%' OR LOWER(s.libelle) LIKE '%séquence 2%' OR LOWER(s.libelle) LIKE '%sequence 2%' THEN ev.note END), 0)
           ) / 2 AS comp
         FROM Eleve e
         JOIN Frequente f ON e.matricule = f.matricule AND f.idAcademi = ?
