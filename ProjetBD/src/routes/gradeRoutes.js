@@ -121,7 +121,7 @@ router.get('/form-data', asyncHandler(async (req, res) => {
  * POST /api/grades
  */
 router.post('/', asyncHandler(async (req, res) => {
-  const { student_id, matiere_id, valeur, commentaire, trimestre, idAnnee } = req.body;
+  const { student_id, matiere_id, valeur, commentaire, trimestre, idAnnee, idEpreuve } = req.body;
   const idAnneeResolved = idAnnee || req.idAnnee || 1;
 
   // Résoudre l'ID de session quand le frontend ne fournit que le trimestre ordinal.
@@ -161,6 +161,7 @@ router.post('/', asyncHandler(async (req, res) => {
     idPers: req.user.id,
     idSession: idSession || 1,
     idAnnee: idAnneeResolved,
+    idEpreuve: idEpreuve ? parseInt(idEpreuve, 10) : null,
   };
 
   const idEval = await evaluationModel.create(data);
