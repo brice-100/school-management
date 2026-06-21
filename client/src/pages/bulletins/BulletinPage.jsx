@@ -408,7 +408,7 @@ export default function BulletinPage() {
             Veuillez sélectionner les critères ci-dessus pour afficher le bulletin de l'élève.
           </p>
         </div>
-      )}
+      )
       })()}
     </div>
   )
