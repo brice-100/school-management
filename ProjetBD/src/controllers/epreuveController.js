@@ -54,6 +54,8 @@ const update = asyncHandler(async (req, res) => {
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
     data.urlDoc = `/uploads/epreuves/${req.file.filename}`;
+  } else {
+    data.urlDoc = existing.urlDoc;
   }
 
   await epreuveModel.update(idEpreuve, data);
