@@ -3,12 +3,11 @@ import {
   Plus, Pencil, Trash2, BookOpen,
   FileText, Star,
 } from 'lucide-react'
-import {
   getEvaluations, getEvaluationsClasse, createEvaluation,
   updateEvaluation, deleteEvaluation,
-  getEpreuves, createEpreuve,
+  getEpreuves, createEpreuve, updateEpreuve, deleteEpreuve,
   getNaturesEpreuve, getSessionsActives,
-  createSession, getTrimestres, getSessions,
+  createSession, updateSession, deleteSession, getTrimestres, createTrimestre, getSessions, updateTrimestre, deleteTrimestre,
 } from '../../services/evaluationService'
 import { getCours, getMesCours, getElevesParCours } from '../../services/coursService'
 import { getStudents } from '../../services/studentService'
@@ -356,6 +355,7 @@ function EpreuvesTab({ user, natures }) {
   const [epreuves,  setEpreuves]  = useState([])
   const [loading,   setLoading]   = useState(true)
   const [showForm,  setShowForm]  = useState(false)
+  const [editId,    setEditId]    = useState(null)
   const [file,      setFile]      = useState(null)
   const [form, setForm] = useState({ libelle: '', auteur: '', idNature: '' })
 
@@ -381,13 +381,34 @@ function EpreuvesTab({ user, natures }) {
     if (file) formData.append('document', file)
 
     try {
-      await createEpreuve(formData)
-      toast.success('Épreuve publiée !')
+      if (editId) {
+        await updateEpreuve(editId, formData)
+        toast.success('Épreuve mise à jour !')
+      } else {
+        await createEpreuve(formData)
+        toast.success('Épreuve publiée !')
+      }
       setShowForm(false)
+      setEditId(null)
       setForm({ libelle: '', auteur: '', idNature: '' })
       setFile(null)
       fetch()
     } catch (err) { toast.error(err.message || 'Erreur.') }
+  }
+
+  const handleEdit = (ep) => {
+    setEditId(ep.idEpreuve)
+    setForm({ libelle: ep.libelle, auteur: ep.auteur || '', idNature: ep.idNature || '' })
+    setShowForm(true)
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Supprimer cette épreuve ?')) return
+    try {
+      await deleteEpreuve(id)
+      toast.success('Épreuve supprimée !')
+      fetch()
+    } catch { toast.error('Erreur suppression.') }
   }
 
   const getDocUrl = (url) => {
@@ -400,7 +421,7 @@ function EpreuvesTab({ user, natures }) {
     <div className="space-y-5">
       <div className="flex justify-between items-center">
         <p className="text-sm text-gray-500">{epreuves.length} épreuve(s)</p>
-        <button onClick={() => setShowForm(v => !v)} className="btn-primary">
+        <button onClick={() => { setShowForm(v => !v); setEditId(null); setForm({ libelle: '', auteur: '', idNature: '' }) }} className="btn-primary">
           <Plus size={15} /> Publier une épreuve
         </button>
       </div>
@@ -408,7 +429,7 @@ function EpreuvesTab({ user, natures }) {
       {showForm && (
         <form onSubmit={handleSubmit} className="card p-5 border-l-4 border-amber-400">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
-            Nouvelle épreuve
+            {editId ? 'Modifier l\'épreuve' : 'Nouvelle épreuve'}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -443,8 +464,8 @@ function EpreuvesTab({ user, natures }) {
             </div>
           </div>
           <div className="flex gap-3 mt-4">
-            <button type="submit" className="btn-primary">Publier</button>
-            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">
+            <button type="submit" className="btn-primary">{editId ? 'Mettre à jour' : 'Publier'}</button>
+            <button type="button" onClick={() => { setShowForm(false); setEditId(null) }} className="btn-secondary">
               Annuler
             </button>
           </div>
@@ -465,7 +486,7 @@ function EpreuvesTab({ user, natures }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                {['Épreuve', 'Type', 'Auteur', 'Document'].map(h => (
+                {['Épreuve', 'Type', 'Auteur', 'Document', 'Actions'].map(h => (
                   <th key={h} className="text-left font-medium text-gray-500 px-5 py-3.5">{h}</th>
                 ))}
               </tr>
@@ -486,9 +507,20 @@ function EpreuvesTab({ user, natures }) {
                     {getDocUrl(ep.urlDoc) ? (
                       <a href={getDocUrl(ep.urlDoc)} target="_blank" rel="noreferrer"
                         className="text-primary-500 text-xs hover:underline flex items-center gap-1">
-                        <Download size={12} /> Voir / Télécharger
+                        <FileText size={12} /> Voir / Télécharger
                       </a>
                     ) : <span className="text-gray-400 text-xs">—</span>}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => handleEdit(ep)} className="btn-icon">
+                        <Pencil size={14} />
+                      </button>
+                      <button onClick={() => handleDelete(ep.idEpreuve)}
+                        className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -501,24 +533,90 @@ function EpreuvesTab({ user, natures }) {
 }
 
 // ── Onglet : Sessions & Trimestres ────────────────────────────────
-function SessionsTab({ sessions, setSessions, trimestres }) {
+function SessionsTab({ sessions, setSessions, trimestres, setTrimestres, selectedYear }) {
   const [showForm, setShowForm] = useState(false)
-  // date_passage : nouvelle colonne ajoutée par le backend (date de passage/examen)
+  const [editIdSession, setEditIdSession] = useState(null)
   const [form, setForm] = useState({
     libelle: '', description: '', idTrimestre: '', date_passage: '',
   })
 
+  const [showFormTrim, setShowFormTrim] = useState(false)
+  const [editIdTrim, setEditIdTrim] = useState(null)
+  const [formTrim, setFormTrim] = useState({
+    libelle: '', periode: ''
+  })
+
+  // SESSIONS
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.libelle || !form.idTrimestre) return toast.error('Libellé et trimestre requis.')
     try {
-      await createSession(form)
-      toast.success('Session créée !')
+      if (editIdSession) {
+        await updateSession(editIdSession, form)
+        toast.success('Session modifiée !')
+      } else {
+        await createSession(form)
+        toast.success('Session créée !')
+      }
       setShowForm(false)
+      setEditIdSession(null)
       setForm({ libelle: '', description: '', idTrimestre: '', date_passage: '' })
       const { data } = await getSessionsActives()
       setSessions(data.sessions || data.data || [])
     } catch (err) { toast.error(err.message || 'Erreur.') }
+  }
+
+  const handleEditSession = (s) => {
+    setEditIdSession(s.idSession)
+    setForm({ libelle: s.libelle, description: s.description || '', idTrimestre: s.idTrimestre || '', date_passage: s.date_passage ? s.date_passage.split('T')[0] : '' })
+    setShowForm(true)
+  }
+
+  const handleDeleteSession = async (id) => {
+    if (!window.confirm('Supprimer cette session ?')) return
+    try {
+      await deleteSession(id)
+      toast.success('Session supprimée !')
+      const { data } = await getSessionsActives()
+      setSessions(data.sessions || data.data || [])
+    } catch { toast.error('Erreur suppression.') }
+  }
+
+  // TRIMESTRES
+  const handleSubmitTrim = async (e) => {
+    e.preventDefault()
+    if (!formTrim.libelle) return toast.error('Libellé requis.')
+    try {
+      const payload = { ...formTrim, idAca: selectedYear?.idAnnee }
+      if (editIdTrim) {
+        await updateTrimestre(editIdTrim, payload)
+        toast.success('Trimestre modifié !')
+      } else {
+        await createTrimestre(payload)
+        toast.success('Trimestre créé !')
+      }
+      setShowFormTrim(false)
+      setEditIdTrim(null)
+      setFormTrim({ libelle: '', periode: '' })
+      const { data } = await getTrimestres({ idAca: selectedYear?.idAnnee })
+      setTrimestres(data.trimestres || data.data || [])
+    } catch (err) { toast.error(err.message || 'Erreur.') }
+  }
+
+  const handleEditTrim = (t) => {
+    setEditIdTrim(t.idTrimes)
+    setFormTrim({ libelle: t.libelle, periode: t.periode || '' })
+    setShowFormTrim(true)
+  }
+
+  const handleDeleteTrim = async (id) => {
+    if (!window.confirm('Supprimer ce trimestre ?')) return
+    try {
+      await deleteTrimestre(id)
+      toast.success('Trimestre supprimé !')
+      const { data } = await getTrimestres({ idAca: selectedYear?.idAnnee })
+      setTrimestres(data.trimestres || data.data || [])
+    } catch { toast.error('Erreur suppression.') }
   }
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : null
@@ -526,16 +624,49 @@ function SessionsTab({ sessions, setSessions, trimestres }) {
   return (
     <div className="space-y-5">
       <div className="flex justify-between items-center">
-        <p className="text-sm text-gray-500">{sessions.length} session(s)</p>
-        <button onClick={() => setShowForm(v => !v)} className="btn-primary">
-          <Plus size={15} /> Créer une session
-        </button>
+        <p className="text-sm text-gray-500">{sessions.length} session(s) | {trimestres.length} trimestre(s)</p>
+        <div className="flex gap-2">
+          <button onClick={() => { setShowFormTrim(v => !v); setEditIdTrim(null); setFormTrim({ libelle: '', periode: '' }) }} className="btn-secondary">
+            <Plus size={15} /> Trimestre
+          </button>
+          <button onClick={() => { setShowForm(v => !v); setEditIdSession(null); setForm({ libelle: '', description: '', idTrimestre: '', date_passage: '' }) }} className="btn-primary">
+            <Plus size={15} /> Session
+          </button>
+        </div>
       </div>
+
+      {showFormTrim && (
+        <form onSubmit={handleSubmitTrim} className="card p-5 border-l-4 border-indigo-400">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
+            {editIdTrim ? 'Modifier le trimestre' : 'Nouveau trimestre'}
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">Libellé *</label>
+              <input value={formTrim.libelle}
+                onChange={e => setFormTrim(f => ({ ...f, libelle: e.target.value }))}
+                placeholder="Ex: Trimestre 1" className="input-field" />
+            </div>
+            <div>
+              <label className="form-label">Période (optionnel)</label>
+              <input value={formTrim.periode}
+                onChange={e => setFormTrim(f => ({ ...f, periode: e.target.value }))}
+                placeholder="Ex: Sep - Dec" className="input-field" />
+            </div>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button type="submit" className="btn-primary">{editIdTrim ? 'Mettre à jour' : 'Créer'}</button>
+            <button type="button" onClick={() => { setShowFormTrim(false); setEditIdTrim(null) }} className="btn-secondary">
+              Annuler
+            </button>
+          </div>
+        </form>
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit} className="card p-5 border-l-4 border-emerald-400">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
-            Nouvelle session
+            {editIdSession ? 'Modifier la session' : 'Nouvelle session'}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -555,7 +686,6 @@ function SessionsTab({ sessions, setSessions, trimestres }) {
                 ))}
               </select>
             </div>
-            {/* date_passage : date de passage / d'examen de la session */}
             <div>
               <label className="form-label">Date de passage</label>
               <input
@@ -564,9 +694,6 @@ function SessionsTab({ sessions, setSessions, trimestres }) {
                 onChange={e => setForm(f => ({ ...f, date_passage: e.target.value }))}
                 className="input-field"
               />
-              <p className="text-xs text-gray-400 mt-1">
-                Date prévue pour le passage de la session
-              </p>
             </div>
             <div>
               <label className="form-label">Description</label>
@@ -576,8 +703,8 @@ function SessionsTab({ sessions, setSessions, trimestres }) {
             </div>
           </div>
           <div className="flex gap-3 mt-4">
-            <button type="submit" className="btn-primary">Créer</button>
-            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">
+            <button type="submit" className="btn-primary">{editIdSession ? 'Mettre à jour' : 'Créer'}</button>
+            <button type="button" onClick={() => { setShowForm(false); setEditIdSession(null) }} className="btn-secondary">
               Annuler
             </button>
           </div>
@@ -596,14 +723,24 @@ function SessionsTab({ sessions, setSessions, trimestres }) {
             <div className="space-y-2">
               {trimestres.map((t, i) => (
                 <div key={t.idTrimes}
-                  className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-                  <div className="w-7 h-7 rounded-lg bg-primary-100 flex items-center
-                    justify-center text-primary-600 text-xs font-bold shrink-0">
-                    T{i + 1}
+                  className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-primary-100 flex items-center
+                      justify-center text-primary-600 text-xs font-bold shrink-0">
+                      T{i + 1}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{t.libelle}</p>
+                      <p className="text-xs text-gray-400">{t.periode}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{t.libelle}</p>
-                    <p className="text-xs text-gray-400">{t.periode}</p>
+                  <div className="flex gap-1">
+                    <button onClick={() => handleEditTrim(t)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg">
+                      <Pencil size={14} />
+                    </button>
+                    <button onClick={() => handleDeleteTrim(t.idTrimes)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -611,7 +748,7 @@ function SessionsTab({ sessions, setSessions, trimestres }) {
           )}
         </div>
 
-        {/* Sessions — affichage date_passage */}
+        {/* Sessions */}
         <div className="card p-4">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Sessions actives
@@ -622,21 +759,30 @@ function SessionsTab({ sessions, setSessions, trimestres }) {
             <div className="space-y-2">
               {sessions.map(s => (
                 <div key={s.idSession}
-                  className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800">{s.libelle}</p>
-                    {s.description && (
-                      <p className="text-xs text-gray-400 truncate">{s.description}</p>
-                    )}
-                    {/* Affichage date_passage */}
-                    {s.date_passage && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span className="text-xs text-primary-600 font-medium">
-                          📅 Passage : {fmtDate(s.date_passage)}
-                        </span>
-                      </div>
-                    )}
+                  className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{s.libelle}</p>
+                      {s.description && (
+                        <p className="text-xs text-gray-400 truncate">{s.description}</p>
+                      )}
+                      {s.date_passage && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-xs text-primary-600 font-medium">
+                            📅 Passage : {fmtDate(s.date_passage)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-1 ml-2">
+                    <button onClick={() => handleEditSession(s)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg">
+                      <Pencil size={14} />
+                    </button>
+                    <button onClick={() => handleDeleteSession(s.idSession)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -719,7 +865,8 @@ export default function EvaluationPage() {
       {tab === 'sessions' && (
         <SessionsTab
           sessions={sessions} setSessions={setSessions}
-          trimestres={trimestres}
+          trimestres={trimestres} setTrimestres={setTrimestres}
+          selectedYear={selectedYear}
         />
       )}
     </div>
