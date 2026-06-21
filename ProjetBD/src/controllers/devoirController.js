@@ -33,7 +33,7 @@ const getDevoirs = asyncHandler(async (req, res) => {
     query += ` AND d.idSalle IN (
       SELECT idSalle FROM Frequente WHERE matricule = ? AND (idAcademi = ? OR ? IS NULL)
     )`;
-    params.push(parseInt(matricule), currentAnnee, currentAnnee);
+    params.push(matricule, currentAnnee, currentAnnee);
   }
 
   if (idCours) {
