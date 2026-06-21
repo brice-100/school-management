@@ -112,15 +112,16 @@ const getBulletinData = asyncHandler(async (req, res) => {
       const s1 = m.seq1 !== null ? parseFloat(m.seq1) : null;
       const s2 = m.seq2 !== null ? parseFloat(m.seq2) : null;
       
-      // La note de composition est obligatoirement (S1 + S2) / 2
-      // Si une seule séquence est saisie, l'autre est considérée comme 0 pour le calcul de la composition.
-      if (s1 !== null || s2 !== null) {
-        m.comp = ((s1 || 0) + (s2 || 0)) / 2;
-      } else {
-        m.comp = null;
+      let moy = 0;
+      if (m.comp !== null) {
+        moy = parseFloat(m.comp);
+      } else if (s1 !== null && s2 !== null) {
+        moy = (s1 + s2) / 2;
+      } else if (s1 !== null) {
+        moy = s1;
+      } else if (s2 !== null) {
+        moy = s2;
       }
-      
-      const moy = m.comp !== null ? m.comp : 0;
       
       return { 
         ...m, 
@@ -163,27 +164,15 @@ const getBulletinData = asyncHandler(async (req, res) => {
     const idSalle = classSalles[0].idSalle;
     const [allMoyennes] = await pool.query(`
       SELECT 
-        sq.matricule,
-        SUM(sq.comp * sq.coefficient) / SUM(sq.coefficient) as moyenne
-      FROM (
-        SELECT 
-          e.matricule,
-          c.idCours,
-          c.coefficient,
-          (
-            COALESCE(MAX(CASE WHEN LOWER(ep.libelle) LIKE '%seq1%' OR LOWER(ep.libelle) LIKE '%séquence 1%' THEN ev.note END), 0) +
-            COALESCE(MAX(CASE WHEN LOWER(ep.libelle) LIKE '%seq2%' OR LOWER(ep.libelle) LIKE '%séquence 2%' THEN ev.note END), 0)
-          ) / 2 AS comp
-        FROM Eleve e
-        JOIN Frequente f ON e.matricule = f.matricule AND f.idAcademi = ?
-        JOIN Evaluation ev ON e.matricule = ev.matricule
-        JOIN Cours c ON ev.idCours = c.idCours
-        JOIN Session s ON ev.idSession = s.idSession
-        JOIN Epreuve ep ON ev.idEpreuve = ep.idEpreuve
-        WHERE f.idSalle = ? AND s.idTrimestre = ? AND ev.valider = 1
-        GROUP BY e.matricule, c.idCours, c.coefficient
-      ) AS sq
-      GROUP BY sq.matricule
+        e.matricule,
+        SUM(ev.note * c.coefficient) / SUM(c.coefficient) as moyenne
+      FROM Eleve e
+      JOIN Frequente f ON e.matricule = f.matricule AND f.idAcademi = ?
+      JOIN Evaluation ev ON e.matricule = ev.matricule
+      JOIN Cours c ON ev.idCours = c.idCours
+      JOIN Session s ON ev.idSession = s.idSession
+      WHERE f.idSalle = ? AND s.idTrimestre = ? AND ev.valider = 1
+      GROUP BY e.matricule
       ORDER BY moyenne DESC
     `, [idAnneeContext, idSalle, idTrimes]);
 
