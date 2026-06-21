@@ -168,7 +168,7 @@ const getBulletinData = asyncHandler(async (req, res) => {
       FROM (
         SELECT 
           e.matricule,
-          e.idCours,
+          c.idCours,
           c.coefficient,
           (
             COALESCE(MAX(CASE WHEN LOWER(ep.libelle) LIKE '%seq1%' OR LOWER(ep.libelle) LIKE '%séquence 1%' THEN ev.note END), 0) +
@@ -181,7 +181,7 @@ const getBulletinData = asyncHandler(async (req, res) => {
         JOIN Session s ON ev.idSession = s.idSession
         JOIN Epreuve ep ON ev.idEpreuve = ep.idEpreuve
         WHERE f.idSalle = ? AND s.idTrimestre = ? AND ev.valider = 1
-        GROUP BY e.matricule, e.idCours, c.coefficient
+        GROUP BY e.matricule, c.idCours, c.coefficient
       ) AS sq
       GROUP BY sq.matricule
       ORDER BY moyenne DESC
