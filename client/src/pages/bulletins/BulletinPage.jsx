@@ -201,8 +201,18 @@ export default function BulletinPage() {
         </div>
       </div>
 
-      {/* ── Le Bulletin (Format Officiel Camerounais) ─────────────────────────── */}
-      {bulletin ? (
+      {/* ── Calculs des Totaux ────────────────────────────────────────────── */}
+      {(() => {
+        let totalComp = 0, totalCoef = 0, totalPoints = 0;
+        if (bulletin?.notes) {
+          bulletin.notes.forEach(n => {
+            totalComp += n.comp !== null ? parseFloat(n.comp) : 0;
+            totalCoef += n.coefficient || 1;
+            totalPoints += (n.moyenne_matiere || 0) * (n.coefficient || 1);
+          });
+        }
+        
+        return bulletin ? (
         <div className="bulletin-paper">
           
           {/* 1. En-tête Officiel (République du Cameroun) */}
@@ -307,10 +317,10 @@ export default function BulletinPage() {
                   <td className="border border-gray-900 px-2 py-1">Total Général</td>
                   <td className="border border-gray-900 px-1 py-1 text-center">—</td>
                   <td className="border border-gray-900 px-1 py-1 text-center">—</td>
-                  <td className="border border-gray-900 px-1 py-1 text-center">—</td>
+                  <td className="border border-gray-900 px-1 py-1 text-center">{totalComp > 0 ? totalComp.toFixed(2) : '—'}</td>
                   <td className="border border-gray-900 px-1 py-1 text-center">{parseFloat(bulletin.moyenne).toFixed(2)}</td>
-                  <td className="border border-gray-900 px-1 py-1 text-center">—</td>
-                  <td className="border border-gray-900 px-1 py-1 text-center">—</td>
+                  <td className="border border-gray-900 px-1 py-1 text-center">{totalCoef}</td>
+                  <td className="border border-gray-900 px-1 py-1 text-center">{totalPoints.toFixed(2)}</td>
                   <td className="border border-gray-900 px-1 py-1 text-center">—</td>
                   <td className="border border-gray-900 px-2 py-1 uppercase">{bulletin.mention}</td>
                 </tr>
@@ -399,6 +409,7 @@ export default function BulletinPage() {
           </p>
         </div>
       )}
+      })()}
     </div>
   )
 }
