@@ -309,13 +309,13 @@ function NotesTab({ user, cours, sessions }) {
                   <tr key={ev.idEval} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-gray-900">
-                        {ev.nomEleve || `Mat. ${ev.matricule}`}
+                        {ev.student_prenom || ev.student_nom ? `${ev.student_prenom || ''} ${ev.student_nom || ''}`.trim() : 'Élève inconnu'}
                       </p>
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">{ev.libelleCours || '—'}</td>
                     <td className="px-5 py-3.5">
                       <span className="badge bg-gray-100 text-gray-600">
-                        {ev.libelleNature || '—'}
+                        {ev.libelleEpreuve || ev.libelleNature || '—'}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
