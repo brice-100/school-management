@@ -14,7 +14,7 @@ const getAll = asyncHandler(async (req, res) => {
 
 const getMesCours = asyncHandler(async (req, res) => {
   const idAnnee = req.query.idAnnee ? parseInt(req.query.idAnnee) : null;
-  const cours = await coursModel.findMesCours(req.user.idPers, idAnnee);
+  const cours = await coursModel.findMesCours(req.user.id, idAnnee);
   return res.status(200).json({ total: cours.length, data: cours });
 });
 
