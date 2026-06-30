@@ -271,6 +271,22 @@ const getByCours = asyncHandler(async (req, res) => {
   const idCours = parseInt(req.query.idCours || req.params.id);
   if (!idCours) return res.status(400).json({ message: 'ID Cours requis' });
   const pool = require('../config/db');
+
+  let extraCondition = '';
+  let queryParams = [idCours];
+
+  // Si l'utilisateur est un enseignant, appliquer le filtre intelligent
+  if (req.user && req.user.typePersonne === 1) {
+    const idPers = req.user.id;
+    // Vérifier s'il est titulaire
+    const [titulaireRows] = await pool.query('SELECT idSalle FROM Titulaire WHERE idPers = ? AND actif = 1', [idPers]);
+    if (titulaireRows.length > 0) {
+      const sallesIds = titulaireRows.map(r => r.idSalle);
+      extraCondition = ' AND s.idSalle IN (?) ';
+      queryParams.push(sallesIds);
+    }
+  }
+
   const [eleves] = await pool.query(`
     SELECT e.matricule, e.nom, e.prenom
     FROM Eleve e
@@ -278,8 +294,10 @@ const getByCours = asyncHandler(async (req, res) => {
     JOIN Salle s ON f.idSalle = s.idSalle
     JOIN Cours c ON s.idClasse = c.idClasse
     WHERE c.idCours = ? AND e.actif = 1 AND e.isDeleted = 0
+    ${extraCondition}
     GROUP BY e.matricule
-  `, [idCours]);
+  `, queryParams);
+  
   return res.status(200).json({ total: eleves.length, data: eleves });
 });
 

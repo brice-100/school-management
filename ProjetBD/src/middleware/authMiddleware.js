@@ -37,6 +37,7 @@ authMiddleware.restrictTo = (...roles) => (req, res, next) => {
   if (roles.includes('teacher') && userType === 'personne' && role === 1) return next();
   if (roles.includes('parent') && userType === 'personne' && role === 4) return next();
   if (roles.includes('scolarite') && userType === 'personne' && role === 3) return next();
+  if (roles.includes('administratif') && userType === 'personne' && role === 2) return next();
   
   return res.status(403).json({ message: "Vous n'avez pas l'autorisation d'effectuer cette action." });
 };

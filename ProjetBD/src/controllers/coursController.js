@@ -18,6 +18,12 @@ const getMesCours = asyncHandler(async (req, res) => {
   return res.status(200).json({ total: cours.length, data: cours });
 });
 
+const getGrouped = asyncHandler(async (req, res) => {
+  const grouped = await coursModel.findGrouped();
+  return res.status(200).json({ total: grouped.length, data: grouped });
+});
+
+
 const getOne = asyncHandler(async (req, res) => {
   const cours = await coursModel.findById(parseInt(req.params.id));
   if (!cours) return res.status(404).json({ message: 'Cours introuvable' });
@@ -61,4 +67,4 @@ const restore = asyncHandler(async (req, res) => {
   return res.status(200).json({ message: 'Cours restauré avec succès' });
 });
 
-module.exports = { getAll, getMesCours, getOne, create, update, updateStatut, remove, restore };
+module.exports = { getAll, getMesCours, getGrouped, getOne, create, update, updateStatut, remove, restore };

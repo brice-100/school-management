@@ -89,7 +89,7 @@ const create = async (data) => {
   // Génération automatique du matricule si absent
   if (!matricule) {
     const year = new Date().getFullYear();
-    const [last] = await pool.query('SELECT matricule FROM Eleve WHERE matricule LIKE ? ORDER BY created_at DESC LIMIT 1', [`AL-${year}-%`]);
+    const [last] = await pool.query('SELECT matricule FROM Eleve WHERE matricule LIKE ? ORDER BY LENGTH(matricule) DESC, matricule DESC LIMIT 1', [`AL-${year}-%`]);
     let nextNum = 1;
     if (last.length > 0) {
       const lastMat = last[0].matricule;
@@ -267,7 +267,7 @@ const generateNextMatricule = async (idClasse) => {
   }
 
   const basePrefix = `${prefix}-${year}-`;
-  const [last] = await pool.query('SELECT matricule FROM Eleve WHERE matricule LIKE ? ORDER BY created_at DESC LIMIT 1', [`${basePrefix}%`]);
+  const [last] = await pool.query('SELECT matricule FROM Eleve WHERE matricule LIKE ? ORDER BY LENGTH(matricule) DESC, matricule DESC LIMIT 1', [`${basePrefix}%`]);
   
   let nextNum = 1;
   if (last.length > 0) {

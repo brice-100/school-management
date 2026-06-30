@@ -75,9 +75,10 @@ const findById = async (idEnseignant) => {
      FROM Personne p
      LEFT JOIN Enseignant e ON p.idPers = e.idPers
      LEFT JOIN Cours c ON e.idCours = c.idCours
-     WHERE (e.idEnseignant = ? OR p.idPers = ?) AND p.typePersonne = 1 AND p.isDeleted = 0 LIMIT 1`,
-    [idEnseignant, idEnseignant]
+     WHERE p.idPers = ? AND p.typePersonne = 1 AND p.isDeleted = 0 LIMIT 1`,
+    [idEnseignant]
   );
+
   if (!rows[0]) return null;
   const row = rows[0];
   row.matieres = row.matieres_json
@@ -278,19 +279,18 @@ const updateCours = async (idPers, idCours, idAdmin = 1) => {
 /**
  * Active ou désactive un enseignant.
  * @param {number} idEnseignant
+ * @param {number} idPers
  * @param {number} actif - 0 ou 1
  */
-const setActif = async (id, actif) => {
+const setActif = async (idEnseignant, idPers, actif) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    // 1. On cherche l'idPers lié si c'est un idEnseignant
-    const [ens] = await conn.query('SELECT idPers FROM Enseignant WHERE idEnseignant = ?', [id]);
-    const actualIdPers = ens.length > 0 ? ens[0].idPers : id;
 
-    // 2. On met à jour les deux tables
-    await conn.query('UPDATE Enseignant SET Actif = ? WHERE idEnseignant = ? OR idPers = ?', [actif, id, actualIdPers]);
-    await conn.query('UPDATE Personne SET actif = ? WHERE idPers = ?', [actif, actualIdPers]);
+    if (idEnseignant) {
+      await conn.query('UPDATE Enseignant SET Actif = ? WHERE idEnseignant = ?', [actif, idEnseignant]);
+    }
+    await conn.query('UPDATE Personne SET actif = ? WHERE idPers = ?', [actif, idPers]);
 
     await conn.commit();
     return 1;
@@ -345,7 +345,38 @@ const remove = async (idEnseignant, idPers) => {
   }
 };
 
+/**
+ * Supprime définitivement un enseignant et sa Personne associée.
+ * @param {number} idEnseignant
+ * @param {number} idPers
+ */
+const hardRemove = async (idEnseignant, idPers) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    
+    // Supprimer les matières associées
+    await conn.query('DELETE FROM teacher_matieres WHERE teacher_id = ?', [idEnseignant]);
+    
+    // Supprimer le rôle de titulaire de classe
+    await conn.query('DELETE FROM Titulaire WHERE idPers = ?', [idPers]);
+    
+    // Supprimer l'enseignant
+    await conn.query('DELETE FROM Enseignant WHERE idEnseignant = ?', [idEnseignant]);
+    
+    // Supprimer la personne
+    await conn.query('DELETE FROM Personne WHERE idPers = ?', [idPers]);
+    
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
+
 module.exports = {
   findAll, findById, findByIdPers, isUsernameTaken,
-  create, updatePersonne, updateCours, setMatieres, setActif, remove, restore
+  create, updatePersonne, updateCours, setMatieres, setActif, remove, restore, hardRemove
 };

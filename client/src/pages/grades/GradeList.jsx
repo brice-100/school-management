@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
-import { Plus, Check, CheckSquare, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Check, CheckSquare, Trash2, RefreshCw } from 'lucide-react'
 import {
-  getGrades, createGrade, validerGrades,
-  deleteGrade, restoreGrade, getGradeFormData,
+  getGrades, createGrade, updateGrade, validerGrades,
+  deleteGrade, restoreGrade, destroyGrade, getGradeFormData,
 } from '../../services/gradeService'
 import { getClasses }  from '../../services/classService'
 import { getMatieres } from '../../services/matiereService'
@@ -42,6 +42,8 @@ export default function GradeList() {
     trimestre: '1', commentaire: '',
     idEpreuve: '', idSession: '',
   })
+  // Classe choisie dans le formulaire de saisie (filtre logique enseignant)
+  const [selectedFormClass, setSelectedFormClass] = useState('')
 
   // ── Charger les données selon le rôle ──────────────────────────
   useEffect(() => {
@@ -104,6 +106,20 @@ export default function GradeList() {
   // Recharger quand les filtres, l'année ou le mode archives changent
   useEffect(() => { fetchGrades() }, [filters, showArchives, selectedYear])
 
+  // Auto-refresh toutes les 30s pour l'admin (voir les nouvelles notes des enseignants)
+  const refreshIntervalRef = useRef(null)
+  useEffect(() => {
+    if (isAdmin) {
+      refreshIntervalRef.current = setInterval(() => {
+        fetchGrades()
+      }, 30000)
+    }
+    return () => {
+      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, filters, showArchives, selectedYear])
+
   // Grouper les notes par classe
   const groupedGrades = grades.reduce((acc, g) => {
     const cName = g.classe_nom || 'Non assigné';
@@ -156,7 +172,6 @@ export default function GradeList() {
       }
 
       if (editingId) {
-        const { updateGrade } = await import('../../services/gradeService')
         await updateGrade(editingId, payload)
         toast.success('Note modifiée !')
       } else {
@@ -166,6 +181,7 @@ export default function GradeList() {
 
       setShowForm(false)
       setEditingId(null)
+      setSelectedFormClass('')
       setForm({ student_id: '', matiere_id: '', valeur: '', trimestre: '1', commentaire: '', idEpreuve: '', idSession: '' })
       fetchGrades()
     } catch (err) {
@@ -175,13 +191,16 @@ export default function GradeList() {
 
   const handleEdit = (g) => {
     setEditingId(g.id)
+    // Retrouver la classe de l'élève depuis la liste des élèves chargés
+    const studentEntry = students.find(s => String(s.matricule || s.id) === String(g.matricule || ''))
+    if (studentEntry?.idClasse) setSelectedFormClass(String(studentEntry.idClasse))
     setForm({
       student_id:  String(g.matricule || ''),
       matiere_id:  String(g.idCours || ''),
       valeur:      String(g.valeur),
       trimestre:   String(filters.trimestre),
       commentaire: g.commentaire || '',
-      idEpreuve:   '', // Non retourné par le findAll général pour le moment
+      idEpreuve:   '',
       idSession:   '',
     })
     setShowForm(true)
@@ -217,6 +236,15 @@ export default function GradeList() {
     } catch { toast.error('Erreur restauration.') }
   }
 
+  const handleDestroy = async (id) => {
+    if (!window.confirm('Supprimer DÉFINITIVEMENT cette note ? Cette action est irréversible.')) return
+    try {
+      await destroyGrade(id)
+      toast.success('Note supprimée définitivement.')
+      fetchGrades()
+    } catch { toast.error('Erreur suppression.') }
+  }
+
   const toggleSelect = (id) =>
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
@@ -250,9 +278,27 @@ export default function GradeList() {
               <CheckSquare size={16} /> Valider ({selected.length})
             </button>
           )}
+          {isAdmin && (
+            <button onClick={fetchGrades}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200
+                hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl"
+              title="Actualiser les notes">
+              <RefreshCw size={15} /> Actualiser
+            </button>
+          )}
           {isTeacher && (
-            <button onClick={() => setShowForm(v => !v)} className="btn-primary">
-              <Plus size={16} /> Saisir une note
+            <button
+              onClick={() => {
+                setShowForm(v => !v)
+                if (showForm) {
+                  // Fermeture : reset complet
+                  setSelectedFormClass('')
+                  setForm({ student_id: '', matiere_id: '', valeur: '', trimestre: '1', commentaire: '', idEpreuve: '', idSession: '' })
+                  setEditingId(null)
+                }
+              }}
+              className="btn-primary">
+              <Plus size={16} /> {showForm ? 'Fermer' : 'Saisir une note'}
             </button>
           )}
           <button onClick={() => setShowArchives(!showArchives)} className="btn-secondary">
@@ -300,9 +346,46 @@ export default function GradeList() {
             {editingId ? 'Modifier la note' : 'Saisir une note'}
           </h2>
 
-          {formLoading ? (
-            <p className="text-gray-400 text-sm">Chargement des données...</p>
-          ) : (
+          {(() => {
+            // Extraire les classes uniques depuis la liste des élèves
+            const classeMap = new Map();
+            students.forEach(s => {
+              if (s.idClasse && !classeMap.has(s.idClasse)) {
+                classeMap.set(s.idClasse, s.classe_nom || `Classe ${s.idClasse}`);
+              }
+            });
+            const classesDisponibles = [...classeMap.entries()].map(([id, nom]) => ({ id, nom }));
+
+            // Filtrer les élèves selon la classe sélectionnée
+            const studentsFiltered = selectedFormClass
+              ? students.filter(s => String(s.idClasse) === String(selectedFormClass))
+              : students;
+
+            // Filtrer les matières selon la classe sélectionnée (via form ou via l'élève sélectionné)
+            const currentClassId = selectedFormClass || 
+              (classesDisponibles.length === 1 ? classesDisponibles[0].id : null) ||
+              students.find(s => String(s.id || s.matricule) === String(form.student_id))?.idClasse;
+              
+            const rawFilteredMatieres = currentClassId
+              ? matieres.filter(m => String(m.idClasse) === String(currentClassId))
+              : matieres;
+
+            // Dédupliquer par nom (sans tenir compte de la casse) pour éviter d'afficher 3x "Mathématiques"
+            const filteredMatieres = [];
+            const seenMatiereNames = new Set();
+            rawFilteredMatieres.forEach(m => {
+              // Récupérer le nom pur avant la parenthèse (ex: "Mathématiques" dans "Mathématiques (CE2)")
+              const rawName = m.libelle || m.nom || '';
+              const baseName = rawName.split('(')[0].trim().toLowerCase();
+              if (!seenMatiereNames.has(baseName)) {
+                seenMatiereNames.add(baseName);
+                filteredMatieres.push(m);
+              }
+            });
+
+            return formLoading ? (
+              <p className="text-gray-400 text-sm">Chargement des données...</p>
+            ) : (
             <>
               {/* Message si pas de données */}
               {students.length === 0 && (
@@ -321,39 +404,77 @@ export default function GradeList() {
               )}
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+
+                {/* ÉTAPE 1 : Choisir la classe (obligatoire si plusieurs classes) */}
+                {classesDisponibles.length > 1 && (
+                  <div className="col-span-2 md:col-span-3">
+                    <label className="form-label">
+                      Classe * ({classesDisponibles.length} disponibles)
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {classesDisponibles.map(cl => (
+                        <button
+                          key={cl.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedFormClass(String(cl.id));
+                            setForm(f => ({ ...f, student_id: '', matiere_id: '' }));
+                          }}
+                          className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                            String(selectedFormClass) === String(cl.id)
+                              ? 'bg-primary-600 text-white border-primary-600 shadow-sm'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-primary-400 hover:text-primary-600'
+                          }`}
+                        >
+                          {cl.nom}
+                        </button>
+                      ))}
+                    </div>
+                    {!selectedFormClass && (
+                      <p className="text-xs text-amber-600 mt-1">⚠️ Sélectionnez d'abord une classe pour filtrer les élèves et les matières.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* ÉTAPE 2 : Choisir l'élève */}
                 <div>
                   <label className="form-label">
-                    Élève * ({students.length} disponibles)
+                    Élève * ({studentsFiltered.length} disponibles)
                   </label>
                   <select
                     value={form.student_id}
                     onChange={e => setForm(f => ({ ...f, student_id: e.target.value }))}
                     className="select-field"
+                    disabled={classesDisponibles.length > 1 && !selectedFormClass}
                   >
                     <option value="">— Choisir —</option>
-                    {students.map(s => (
+                    {studentsFiltered.map(s => (
                       <option key={s.matricule || s.id} value={String(s.matricule || s.id)}>
                         {s.prenom} {s.nom}
-                        {s.classe_nom ? ` (${s.classe_nom})` : ''}
                       </option>
                     ))}
                   </select>
                 </div>
 
+                {/* ÉTAPE 3 : Choisir la matière (filtrée par classe) */}
                 <div>
                   <label className="form-label">
-                    Matière * ({matieres.length} disponibles)
+                    Matière * ({filteredMatieres.length} disponibles)
                   </label>
                   <select
                     value={form.matiere_id}
                     onChange={e => setForm(f => ({ ...f, matiere_id: e.target.value }))}
                     className="select-field"
+                    disabled={classesDisponibles.length > 1 && !selectedFormClass}
                   >
                     <option value="">— Choisir —</option>
-                    {matieres.map(m => (
-                      // CORRIGÉ: Utiliser idCours ou id (et libelle ou nom) pour correspondre au format aliasé du backend
-                      <option key={m.idCours || m.id} value={String(m.idCours || m.id)}>{m.libelle || m.nom}</option>
-                    ))}
+                    {filteredMatieres.map(m => {
+                      // Nettoyer le nom pour l'affichage (enlever la parenthèse de la classe si présente)
+                      const displayName = (m.libelle || m.nom || '').split('(')[0].trim();
+                      return (
+                        <option key={m.idCours || m.id} value={String(m.idCours || m.id)}>{displayName}</option>
+                      );
+                    })}
                   </select>
                 </div>
 
@@ -424,13 +545,21 @@ export default function GradeList() {
                 <button type="submit" className="btn-primary">
                   Enregistrer
                 </button>
-                <button type="button" onClick={() => setShowForm(false)}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(false)
+                    setEditingId(null)
+                    setSelectedFormClass('')
+                    setForm({ student_id: '', matiere_id: '', valeur: '', trimestre: '1', commentaire: '', idEpreuve: '', idSession: '' })
+                  }}
                   className="btn-secondary">
                   Annuler
                 </button>
               </div>
             </>
-          )}
+            );
+          })()}
         </form>
       )}
 
@@ -454,20 +583,23 @@ export default function GradeList() {
             </p>
           </div>
         ) : !selectedClass ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-5">
             {sortedClassNames.map((cName) => (
               <div 
                 key={cName} 
                 onClick={() => setSelectedClass(cName)}
-                className="card p-6 cursor-pointer hover:border-primary-500 hover:shadow-md transition-all flex flex-col items-center justify-center text-center bg-white"
+                className="card p-6 cursor-pointer hover:border-primary-500 hover:shadow-md transition-all flex flex-col items-center justify-center text-center bg-white group"
               >
-                <div className="w-12 h-12 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center font-bold mb-3">
+                <div className="w-12 h-12 rounded-full bg-primary-50 text-primary-600 flex items-center justify-center font-bold mb-3 group-hover:scale-110 transition-transform">
                   {cName.substring(0, 2).toUpperCase()}
                 </div>
                 <h3 className="font-semibold text-gray-900 text-lg mb-1">{cName}</h3>
-                <p className="text-gray-500 text-sm font-medium">
+                <p className="text-gray-500 text-sm font-medium mb-3">
                   {groupedGrades[cName].length} note(s)
                 </p>
+                <div className="text-primary-600 text-xs font-semibold uppercase tracking-wider flex items-center gap-1 opacity-80 group-hover:opacity-100">
+                  Voir les notes <span>→</span>
+                </div>
               </div>
             ))}
           </div>
@@ -475,109 +607,121 @@ export default function GradeList() {
           <div className="p-1">
             <div className="px-5 py-4 flex items-center gap-3 border-b border-gray-100 bg-gray-50/50">
               <button onClick={() => setSelectedClass(null)} className="btn-secondary text-xs py-1.5 px-3">
-                ← Retour
+                ← Retour aux classes
               </button>
               <h2 className="font-semibold text-gray-800 text-base">Classe : {selectedClass}</h2>
+              <span className="ml-auto text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">
+                {groupedGrades[selectedClass]?.length || 0} note(s)
+              </span>
             </div>
-            <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {isAdmin && (
-                  <th className="px-4 py-3 w-10">
-                    <input type="checkbox"
-                      onChange={e => setSelected(
-                        e.target.checked
-                          ? grades.filter(g => g.statut === 'brouillon').map(g => g.id)
-                          : []
-                      )}
-                      className="w-4 h-4 rounded border-gray-300"
-                    />
-                  </th>
-                )}
-                <th className="text-left font-medium text-gray-500 px-4 py-3">Élève</th>
-                <th className="text-left font-medium text-gray-500 px-4 py-3">Matière</th>
-                <th className="text-left font-medium text-gray-500 px-4 py-3">Classe</th>
-                <th className="text-center font-medium text-gray-500 px-4 py-3">Note</th>
-                <th className="text-left font-medium text-gray-500 px-4 py-3">Statut</th>
-                {isAdmin  && <th className="text-left font-medium text-gray-500 px-4 py-3">Enseignant</th>}
-                {isTeacher && <th className="text-right font-medium text-gray-500 px-4 py-3">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {groupedGrades[selectedClass].map(g => (
-                <tr key={g.id}
-                  className={`hover:bg-gray-50/50 transition-colors
-                    ${selected.includes(g.id) ? 'bg-blue-50/40' : ''}`}>
-                  {isAdmin && (
-                    <td className="px-4 py-3">
-                      {g.statut === 'brouillon' && (
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    {isAdmin && (
+                      <th className="px-4 py-3 w-10">
                         <input type="checkbox"
-                          checked={selected.includes(g.id)}
-                          onChange={() => toggleSelect(g.id)}
-                          className="w-4 h-4 rounded border-gray-300 text-primary-500"
+                          onChange={e => setSelected(
+                            e.target.checked
+                              ? (groupedGrades[selectedClass] || []).filter(g => g.statut === 'brouillon').map(g => g.id)
+                              : []
+                          )}
+                          className="w-4 h-4 rounded border-gray-300"
                         />
+                      </th>
+                    )}
+                    <th className="text-left font-medium text-gray-500 px-4 py-3">Élève</th>
+                    <th className="text-left font-medium text-gray-500 px-4 py-3">Matière</th>
+                    <th className="text-left font-medium text-gray-500 px-4 py-3">Classe</th>
+                    <th className="text-center font-medium text-gray-500 px-4 py-3">Note</th>
+                    <th className="text-left font-medium text-gray-500 px-4 py-3">Statut</th>
+                    {isAdmin  && <th className="text-left font-medium text-gray-500 px-4 py-3">Enseignant</th>}
+                    {isTeacher && <th className="text-right font-medium text-gray-500 px-4 py-3">Actions</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {(groupedGrades[selectedClass] || []).map(g => (
+                    <tr key={g.id}
+                      className={`hover:bg-gray-50/50 transition-colors
+                        ${selected.includes(g.id) ? 'bg-blue-50/40' : ''}`}>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          {g.statut === 'brouillon' && (
+                            <input type="checkbox"
+                              checked={selected.includes(g.id)}
+                              onChange={() => toggleSelect(g.id)}
+                              className="w-4 h-4 rounded border-gray-300 text-primary-500"
+                            />
+                          )}
+                        </td>
                       )}
-                    </td>
-                  )}
-                  <td className="px-4 py-3 font-medium text-gray-900">
-                    {g.student_prenom} {g.student_nom}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{g.matiere_nom}</td>
-                  <td className="px-4 py-3">
-                    <span className="badge bg-blue-50 text-blue-700">
-                      {g.classe_nom || '—'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`text-lg ${noteColor(g.valeur)}`}>
-                      {parseFloat(g.valeur).toFixed(2)}
-                    </span>
-                    <span className="text-gray-400 text-xs">/20</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {g.statut === 'valide'
-                      ? <span className="badge bg-emerald-50 text-emerald-700">
-                          <Check size={11} className="mr-1" />Validée
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {g.student_prenom} {g.student_nom}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{g.matiere_nom}</td>
+                      <td className="px-4 py-3">
+                        <span className="badge bg-blue-50 text-blue-700">
+                          {g.classe_nom || '—'}
                         </span>
-                      : <span className="badge bg-amber-50 text-amber-700">Brouillon</span>
-                    }
-                  </td>
-                  {isAdmin && (
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {g.teacher_prenom} {g.teacher_nom}
-                    </td>
-                  )}
-                  {isTeacher && (
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        {showArchives ? (
-                          <button onClick={() => handleRestore(g.id)}
-                            className="btn-secondary text-xs py-1 px-3">
-                            Restaurer
-                          </button>
-                        ) : (
-                          <>
-                            {g.statut === 'brouillon' && (
-                              <button onClick={() => handleEdit(g)}
-                                className="btn-icon text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600"
-                                title="Modifier">
-                                <Plus size={14} className="rotate-45" />
-                              </button>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`text-lg ${noteColor(g.valeur)}`}>
+                          {parseFloat(g.valeur).toFixed(2)}
+                        </span>
+                        <span className="text-gray-400 text-xs">/20</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {g.statut === 'valide'
+                          ? <span className="badge bg-emerald-50 text-emerald-700">
+                              <Check size={11} className="mr-1" />Validée
+                            </span>
+                          : <span className="badge bg-amber-50 text-amber-700">Brouillon</span>
+                        }
+                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3 text-gray-500 text-xs">
+                          {g.teacher_prenom} {g.teacher_nom}
+                        </td>
+                      )}
+                      {isTeacher && (
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            {showArchives ? (
+                              <>
+                                <button onClick={() => handleRestore(g.id)}
+                                  className="btn-secondary text-xs py-1 px-3">
+                                  Restaurer
+                                </button>
+                                <button onClick={() => handleDestroy(g.id)}
+                                  className="btn-secondary text-xs py-1 px-3 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300">
+                                  Supprimer
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                {g.statut === 'brouillon' && (
+                                  <button onClick={() => handleEdit(g)}
+                                    className="btn-icon text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600"
+                                    title="Modifier">
+                                    <Plus size={14} className="rotate-45" />
+                                  </button>
+                                )}
+                                <button onClick={() => handleDelete(g.id)}
+                                  className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
+                                  title="Archiver">
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
                             )}
-                            <button onClick={() => handleDelete(g.id)}
-                              className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
-                              title="Archiver">
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

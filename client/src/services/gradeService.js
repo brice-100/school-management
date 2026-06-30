@@ -10,6 +10,7 @@ export const updateGrade       = (id, data)      => api.put(`/grades/${id}`, dat
 export const validerGrades     = (ids)           => api.patch('/grades/valider', { ids })
 export const deleteGrade       = (id)            => api.delete(`/grades/${id}`)
 export const restoreGrade      = (id)            => api.patch(`/grades/${id}/restaurer`)
+export const destroyGrade      = (id)            => api.delete(`/grades/${id}/destroy`)
 
 export const getGrade = (params) => api.get('/evaluations', { params })
 export const CreateGrade = (data) => {

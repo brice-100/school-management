@@ -138,11 +138,25 @@ const update = asyncHandler(async (req, res) => {
   // Mettre à jour les infos Personne
   await enseignantModel.updatePersonne(existing.idPers, req.body);
 
-  // Mettre à jour les matières si fournies (multi-matières)
+  // Analyser les matières envoyées AVANT de créer éventuellement l'entrée Enseignant
   const coursIds = parseIdCoursBody(req.body.idCours);
-  if (coursIds !== undefined) {
-    await enseignantModel.setMatieres(idEnseignant, existing.idPers, coursIds, req.user.id);
+  const firstCoursId = (coursIds && coursIds.length > 0) ? coursIds[0] : null;
+
+  let currentIdEnseignant = existing.idEnseignant;
+  if (!currentIdEnseignant) {
+    const pool = require('../config/db');
+    const [ensRes] = await pool.query(
+      'INSERT INTO Enseignant (idPers, idCours, Actif, idAdmin, created_at) VALUES (?, ?, 1, ?, NOW())',
+      [existing.idPers, firstCoursId, req.user.id]
+    );
+    currentIdEnseignant = ensRes.insertId;
   }
+
+  // Mettre à jour les matières si fournies (multi-matières)
+  if (coursIds !== undefined && currentIdEnseignant) {
+    await enseignantModel.setMatieres(currentIdEnseignant, existing.idPers, coursIds, req.user.id);
+  }
+
 
   // Mettre à jour la classe (Titulaire)
   if (req.body.classe_id !== undefined) {
@@ -185,7 +199,7 @@ const updateStatut = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Enseignant introuvable' });
   }
 
-  await enseignantModel.setActif(idEnseignant, actif);
+  await enseignantModel.setActif(existing.idEnseignant, existing.idPers, actif);
   return res.status(200).json({
     message: actif === 1 ? 'Enseignant activé' : 'Enseignant désactivé',
     idEnseignant,
@@ -224,7 +238,7 @@ const remove = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Enseignant introuvable' });
   }
 
-  await enseignantModel.remove(idEnseignant, existing.idPers);
+  await enseignantModel.remove(existing.idEnseignant, existing.idPers);
   return res.status(200).json({ message: 'Enseignant supprimé logiquement', idEnseignant });
 });
 
@@ -233,13 +247,14 @@ const remove = asyncHandler(async (req, res) => {
  * Restaure un enseignant archivé
  */
 const restore = asyncHandler(async (req, res) => {
-  const idEnseignant = parseInt(req.params.idEnseignant);
+  const idPers = parseInt(req.params.idEnseignant);
   const pool = require('../config/db');
-  const [ens] = await pool.query('SELECT idPers FROM Enseignant WHERE idEnseignant = ?', [idEnseignant]);
-  if (!ens[0]) return res.status(404).json({ message: 'Enseignant introuvable' });
+  
+  const [pers] = await pool.query('SELECT idPers FROM Personne WHERE idPers = ? AND typePersonne = 1', [idPers]);
+  if (!pers[0]) return res.status(404).json({ message: 'Enseignant introuvable' });
 
-  await enseignantModel.restore(ens[0].idPers);
-  return res.status(200).json({ message: 'Enseignant restauré avec succès', idEnseignant });
+  await enseignantModel.restore(idPers);
+  return res.status(200).json({ message: 'Enseignant restauré avec succès', idEnseignant: idPers });
 });
 
 /**
@@ -257,41 +272,71 @@ const getElevesEnseignant = asyncHandler(async (req, res) => {
 
   const currentAnnee = parseInt(req.idAnnee) || null;
 
-  const [rows] = await pool.query(`
-    SELECT DISTINCT
-      e.matricule, e.nom, e.prenom, e.sexe,
-      e.photoURL AS photo, e.actif,
-      s.idSalle, cl.idClasse,
-      cl.libelle AS cl_libelle,
-      s.libelle AS s_libelle,
-      CONCAT(cl.libelle, ' - ', s.libelle) AS classe_nom,
-      e.dateNaissance
-    FROM Eleve e
-    JOIN Frequente f ON f.matricule = e.matricule
-    JOIN Salle s ON s.idSalle = f.idSalle
-    JOIN Classe cl ON cl.idClasse = s.idClasse
-    WHERE (
-      s.idClasse IN (
-        SELECT c.idClasse FROM Cours c
-        JOIN Enseignant ens ON ens.idCours = c.idCours
-        WHERE ens.idPers = ?
+  // 1. Vérifier si l'enseignant est affecté comme Titulaire à une ou plusieurs salles
+  const [titulaireRows] = await pool.query('SELECT idSalle FROM Titulaire WHERE idPers = ? AND actif = 1', [enseignant.idPers]);
+  const isTitulaire = titulaireRows.length > 0;
+
+  let query = '';
+  let queryParams = [];
+
+  if (isTitulaire) {
+    // S'il est affecté à une classe (Titulaire), il ne voit QUE les élèves de cette classe
+    const sallesIds = titulaireRows.map(r => r.idSalle);
+    query = `
+      SELECT DISTINCT
+        e.matricule, e.nom, e.prenom, e.sexe,
+        e.photoURL AS photo, e.actif,
+        s.idSalle, cl.idClasse,
+        cl.libelle AS cl_libelle,
+        s.libelle AS s_libelle,
+        CONCAT(cl.libelle, ' - ', s.libelle) AS classe_nom,
+        e.dateNaissance
+      FROM Eleve e
+      JOIN Frequente f ON f.matricule = e.matricule
+      JOIN Salle s ON s.idSalle = f.idSalle
+      JOIN Classe cl ON cl.idClasse = s.idClasse
+      WHERE s.idSalle IN (?)
+      AND e.actif = 1 AND e.isDeleted = 0
+      AND (f.idAcademi = ? OR ? IS NULL)
+      ORDER BY cl_libelle ASC, s_libelle ASC, e.nom ASC, e.prenom ASC
+    `;
+    queryParams = [sallesIds, currentAnnee, currentAnnee];
+  } else {
+    // Sinon (professeur de spécialité), il voit les élèves des classes où il a des matières
+    query = `
+      SELECT DISTINCT
+        e.matricule, e.nom, e.prenom, e.sexe,
+        e.photoURL AS photo, e.actif,
+        s.idSalle, cl.idClasse,
+        cl.libelle AS cl_libelle,
+        s.libelle AS s_libelle,
+        CONCAT(cl.libelle, ' - ', s.libelle) AS classe_nom,
+        e.dateNaissance
+      FROM Eleve e
+      JOIN Frequente f ON f.matricule = e.matricule
+      JOIN Salle s ON s.idSalle = f.idSalle
+      JOIN Classe cl ON cl.idClasse = s.idClasse
+      WHERE (
+        s.idClasse IN (
+          SELECT c.idClasse FROM Cours c
+          JOIN Enseignant ens ON ens.idCours = c.idCours
+          WHERE ens.idPers = ?
+        )
+        OR s.idClasse IN (
+          SELECT c2.idClasse FROM teacher_matieres tm
+          JOIN Cours c2 ON c2.idCours = tm.matiere_id
+          JOIN Enseignant ens2 ON ens2.idEnseignant = tm.teacher_id
+          WHERE ens2.idPers = ?
+        )
       )
-      OR s.idClasse IN (
-        SELECT c2.idClasse FROM teacher_matieres tm
-        JOIN Cours c2 ON c2.idCours = tm.matiere_id
-        JOIN Enseignant ens2 ON ens2.idEnseignant = tm.teacher_id
-        WHERE ens2.idPers = ?
-      )
-      OR s.idSalle IN (
-        SELECT sa.idSalle FROM Titulaire ti
-        JOIN Salle sa ON sa.idSalle = ti.idSalle
-        WHERE ti.idPers = ?
-      )
-    )
-    AND e.actif = 1 AND e.isDeleted = 0
-    AND (f.idAcademi = ? OR ? IS NULL)
-    ORDER BY cl_libelle ASC, s_libelle ASC, e.nom ASC, e.prenom ASC
-  `, [enseignant.idPers, enseignant.idPers, enseignant.idPers, currentAnnee, currentAnnee]);
+      AND e.actif = 1 AND e.isDeleted = 0
+      AND (f.idAcademi = ? OR ? IS NULL)
+      ORDER BY cl_libelle ASC, s_libelle ASC, e.nom ASC, e.prenom ASC
+    `;
+    queryParams = [enseignant.idPers, enseignant.idPers, currentAnnee, currentAnnee];
+  }
+
+  const [rows] = await pool.query(query, queryParams);
 
   // Grouper par salle
   const classeMap = {};
@@ -319,4 +364,19 @@ const getElevesEnseignant = asyncHandler(async (req, res) => {
   return res.status(200).json({ total: rows.length, classes, data: rows });
 });
 
-module.exports = { getAll, getOne, create, update, updateStatut, updatePassword, remove, restore, getElevesEnseignant };
+/**
+ * DELETE /api/enseignants/:idEnseignant/hard
+ * Suppression définitive — réservé root/admin
+ */
+const hardRemove = asyncHandler(async (req, res) => {
+  const idEnseignant = parseInt(req.params.idEnseignant);
+
+  const pool = require('../config/db');
+  const [ens] = await pool.query('SELECT idEnseignant FROM Enseignant WHERE idPers = ?', [idEnseignant]);
+  if (!ens[0] && !idEnseignant) return res.status(404).json({ message: 'Enseignant introuvable' });
+
+  await enseignantModel.hardRemove(ens[0]?.idEnseignant || null, idEnseignant);
+  return res.status(200).json({ message: 'Enseignant supprimé définitivement', idEnseignant });
+});
+
+module.exports = { getAll, getOne, create, update, updateStatut, updatePassword, remove, restore, getElevesEnseignant, hardRemove };

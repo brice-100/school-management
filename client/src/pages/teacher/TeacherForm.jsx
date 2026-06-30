@@ -5,8 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowLeft, Upload, Eye, EyeOff, X, Check } from 'lucide-react'
 import { createTeacher, updateTeacher, getTeacher } from '../../services/teacherService'
-import { getClasses }  from '../../services/classService'
-import { getMatieres } from '../../services/matiereService'
+import { getClasses }          from '../../services/classService'
+import { getMatieres }         from '../../services/matiereService'
 import toast from 'react-hot-toast'
 
 const schema = z.object({
@@ -26,8 +26,10 @@ export default function TeacherForm() {
   const isEdit   = Boolean(id)
 
   const [classes,         setClasses]         = useState([])
+  // matieres = liste groupée : [{idCours, libelle, ids:[...tous les idCours], ...}]
   const [matieres,        setMatieres]        = useState([])
-  const [selectedCours,   setSelectedCours]   = useState([]) // tableau d'idCours sélectionnés
+  // selectedIds = tableau des idCours sélectionnés
+  const [selectedIds,  setSelectedIds]  = useState([])
   const [preview,         setPreview]         = useState(null)
   const [photoFile,       setPhotoFile]       = useState(null)
   const [showPwd,         setShowPwd]         = useState(false)
@@ -37,22 +39,28 @@ export default function TeacherForm() {
     resolver: zodResolver(schema),
   })
 
-  // Charger classes + matières
+  // 1. Charger classes + matières
   useEffect(() => {
     Promise.all([getClasses(), getMatieres()])
       .then(([c, m]) => {
         setClasses(c.data.data  || [])
         setMatieres(m.data.data || [])
       })
-      .catch(() => toast.error('Erreur chargement données.'))
+      .catch(err => {
+        console.error('[TeacherForm] Erreur matières/classes :', err)
+        toast.error('Erreur de chargement des matières.')
+      })
   }, [])
 
-  // Pré-remplir si édition
+  // 2. Charger les données de l'enseignant (mode édition seulement)
+  const [teacherData, setTeacherData] = useState(null)
   useEffect(() => {
-    if (!isEdit) return
+    if (!isEdit || !id) return
     getTeacher(id)
       .then(({ data }) => {
         const t = data.data
+        if (!t) return
+        setTeacherData(t)
         reset({
           nom:           t.nom           || '',
           prenom:        t.prenom        || '',
@@ -63,26 +71,39 @@ export default function TeacherForm() {
           classe_id:     t.classe_id     ? String(t.classe_id) : '',
           mot_de_passe:  '',
         })
-        // Pré-sélectionner les matières existantes
-        if (t.matieres && t.matieres.length > 0) {
-          setSelectedCours(t.matieres.map(m => String(m.idCours)))
-        } else if (t.idCours) {
-          setSelectedCours([String(t.idCours)])
-        }
         if (t.photo) {
           setPreview(`${import.meta.env.VITE_API_URL.replace('/api', '')}/${t.photo}`)
         }
       })
-      .catch(() => toast.error('Erreur chargement enseignant.'))
+      .catch(err => {
+        console.error('[TeacherForm] Erreur chargement enseignant :', err)
+        toast.error('Erreur de chargement des données enseignant.')
+      })
   }, [id, isEdit, reset])
 
-  // Basculer une matière dans la sélection
+  // 3. Pré-sélectionner les matières dès que l'enseignant ET les matières sont disponibles
+  useEffect(() => {
+    if (!teacherData || matieres.length === 0) return
+    const assignedIds = new Set()
+    if (teacherData.matieres?.length > 0) {
+      teacherData.matieres.forEach(mat => assignedIds.add(Number(mat.idCours)))
+    } else if (teacherData.idCours) {
+      assignedIds.add(Number(teacherData.idCours))
+    }
+    if (assignedIds.size > 0) {
+      setSelectedIds(Array.from(assignedIds))
+    }
+  }, [teacherData, matieres])
+
+
+  // Basculer une matière (par libellé) dans la sélection
   const toggleMatiere = (idCours) => {
-    const s = String(idCours)
-    setSelectedCours(prev =>
-      prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
+    setSelectedIds(prev =>
+      prev.includes(idCours) ? prev.filter(x => x !== idCours) : [...prev, idCours]
     )
   }
+
+
 
   const onSubmit = async (values) => {
     setLoading(true)
@@ -99,9 +120,8 @@ export default function TeacherForm() {
       // Photo
       if (photoFile) fd.append('photo', photoFile)
 
-      // Matières — toujours envoyer idCours (même vide) pour remplacer la liste côté serveur
-      if (selectedCours.length > 0) {
-        selectedCours.forEach(c => fd.append('idCours', c))
+      if (selectedIds.length > 0) {
+        selectedIds.forEach(c => fd.append('idCours', String(c)))
       } else {
         fd.append('idCours', '')
       }
@@ -213,13 +233,13 @@ export default function TeacherForm() {
               </select>
             </Field>
 
-            {/* Multi-matières */}
+            {/* Multi-matières spécifiques (sans regroupement par libellé) */}
             <div>
               <label className="form-label">
                 Matières enseignées
-                {selectedCours.length > 0 && (
+                {selectedIds.length > 0 && (
                   <span className="ml-2 text-xs font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                    {selectedCours.length} sélectionnée{selectedCours.length > 1 ? 's' : ''}
+                    {selectedIds.length} sélectionnée{selectedIds.length > 1 ? 's' : ''}
                   </span>
                 )}
               </label>
@@ -231,13 +251,12 @@ export default function TeacherForm() {
               ) : (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {matieres.map(m => {
-                    const mid = String(m.idCours || m.id)
-                    const isSelected = selectedCours.includes(mid)
+                    const isSelected = selectedIds.includes(m.idCours)
                     return (
                       <button
-                        key={mid}
+                        key={m.idCours}
                         type="button"
-                        onClick={() => toggleMatiere(mid)}
+                        onClick={() => toggleMatiere(m.idCours)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium
                           border transition-all duration-150 cursor-pointer select-none
                           ${isSelected
@@ -246,7 +265,7 @@ export default function TeacherForm() {
                           }`}
                       >
                         {isSelected && <Check size={13} />}
-                        {m.libelle || m.nom}
+                        {m.libelle} {m.classe_nom ? `(${m.classe_nom})` : ''}
                         {isSelected && (
                           <X size={12} className="opacity-70 hover:opacity-100" />
                         )}
@@ -256,10 +275,10 @@ export default function TeacherForm() {
                 </div>
               )}
 
-              {selectedCours.length > 0 && (
+              {selectedIds.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setSelectedCours([])}
+                  onClick={() => setSelectedIds([])}
                   className="mt-2 text-xs text-gray-400 hover:text-red-500 underline transition-colors"
                 >
                   Tout désélectionner

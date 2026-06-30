@@ -47,6 +47,38 @@ const findMesCours = async (idPers, idAnnee = null) => {
   return rows;
 };
 
+/**
+ * Retourne les matières groupées par libellé (sans doublons).
+ * Chaque entrée contient :
+ *   - idCours       : le premier idCours du groupe (référence principale)
+ *   - libelle, coefficient, description
+ *   - ids           : tous les idCours partageant ce libellé [Number[]]
+ *   - classes_noms  : noms des classes séparés par ", "
+ *   - classes_ids   : liste des idClasse associés [Number[]]
+ */
+const findGrouped = async () => {
+  const [rows] = await pool.query(`
+    SELECT
+      MIN(co.idCours) AS idCours,
+      MAX(co.libelle) AS libelle,
+      MAX(co.coefficient) AS coefficient,
+      MAX(co.description) AS description,
+      GROUP_CONCAT(DISTINCT co.idCours ORDER BY co.idCours) AS ids,
+      GROUP_CONCAT(DISTINCT c.libelle  ORDER BY c.libelle  SEPARATOR ', ') AS classes_noms,
+      GROUP_CONCAT(DISTINCT co.idClasse ORDER BY co.idClasse) AS classes_ids
+    FROM Cours co
+    LEFT JOIN Classe c ON co.idClasse = c.idClasse
+    WHERE co.isDeleted = 0
+    GROUP BY LOWER(TRIM(co.libelle))
+    ORDER BY MAX(co.libelle) ASC
+  `);
+  return rows.map(r => ({
+    ...r,
+    ids:         r.ids         ? r.ids.split(',').map(Number)         : [r.idCours],
+    classes_ids: r.classes_ids ? r.classes_ids.split(',').map(Number) : [],
+  }));
+};
+
 const findById = async (idCours) => {
   const [rows] = await pool.query('SELECT * FROM Cours WHERE idCours = ? AND isDeleted = 0', [idCours]);
   return rows[0] || null;
@@ -96,4 +128,4 @@ const findElevesParCours = async (idCours) => {
   return rows;
 };
 
-module.exports = { findAll, findMesCours, findById, create, update, setActif, remove, restore, findElevesParCours };
+module.exports = { findAll, findMesCours, findGrouped, findById, create, update, setActif, remove, restore, findElevesParCours };

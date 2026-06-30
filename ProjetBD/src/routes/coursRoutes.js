@@ -8,9 +8,10 @@ router.use(protect);
 
 router.get('/', coursController.getAll);
 router.get('/mes-cours', coursController.getMesCours);
+router.get('/grouped',   coursController.getGrouped);
 router.get('/:id',       coursController.getOne);
 
-router.use(restrictTo('admin'));
+router.use(restrictTo('admin', 'scolarite', 'administratif'));
 router.post('/', coursController.create);
 router.put('/:id', coursController.update);
 router.patch('/:id/statut', coursController.updateStatut);

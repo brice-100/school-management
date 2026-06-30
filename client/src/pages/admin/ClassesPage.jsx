@@ -187,11 +187,12 @@ function SallesTab({ classes }) {
 
 // ── Onglet Cours / Matières ───────────────────────────────────────
 function CoursTab({ classes }) {
-  const [cours,  setCours]  = useState([])
+  const [cours,   setCours]   = useState([])
   const [form,    setForm]    = useState({ libelle:'', description:'', coefficient:'', idClasse:'' })
   const [editId,  setEditId]  = useState(null)
   const [loading, setLoading] = useState(false)
 
+  // On charge la liste plate (une entrée par idCours) pour le CRUD
   const fetchCours = () =>
     coursService.getCours()
       .then(({ data }) => setCours(data.cours || data.data || []))
@@ -230,28 +231,127 @@ function CoursTab({ classes }) {
     catch (err) { toast.error(err.message || 'Erreur.') }
   }
 
+  // Grouper par libellé pour l'affichage
+  const grouped = Object.values(
+    cours.reduce((acc, c) => {
+      const key = c.libelle?.toLowerCase().trim() || ''
+      if (!acc[key]) {
+        acc[key] = { ...c, _entries: [c] }
+      } else {
+        acc[key]._entries.push(c)
+      }
+      return acc
+    }, {})
+  ).sort((a, b) => (a.libelle || '').localeCompare(b.libelle || ''))
+
+  const getClasseLabel = (idClasse) => {
+    const c = classes.find(c => String(c.idClasse) === String(idClasse))
+    return c ? c.libelle : `#${idClasse}`
+  }
+
   return (
-    <RefTable
-      title="Matières" items={cours} editId={editId}
-      form={form} setForm={setForm} loading={loading}
-      idKey="idCours"
-      fields={[
-        { key:'libelle',  label:'Libellé',  placeholder:'Ex: Mathématiques' },
-        { key:'coefficient', label:'Coefficient', placeholder:'Ex: 4', type: 'number' },
-        { key:'description',  label:'Description',  placeholder:'Ex: Algèbre et Géométrie' },
-        {
-          key:'idClasse', label:'Classe',
-          options: classes.map(c => ({ value: String(c.idClasse), label: c.libelle })),
-        },
-      ]}
-      onAdd={handleSubmit} onEdit={handleEdit} onDelete={handleDelete}
-      extraActions={(item) => {
-        const classe = classes.find(c => String(c.idClasse) === String(item.idClasse))
-        return classe ? <span className="badge bg-blue-50 text-blue-700">{classe.libelle}</span> : <span className="text-gray-400">—</span>
-      }}
-    />
+    <div>
+      {/* Formulaire d'ajout/modification */}
+      <form onSubmit={handleSubmit} className="flex flex-wrap gap-3 mb-5 items-end">
+        {[
+          { key:'libelle', label:'Libellé', placeholder:'Ex: Mathématiques' },
+          { key:'coefficient', label:'Coefficient', placeholder:'Ex: 4', type:'number' },
+          { key:'description', label:'Description', placeholder:'Ex: Algèbre et Géométrie' },
+        ].map(({ key, label, placeholder, type='text' }) => (
+          <div key={key} className="flex-1 min-w-36">
+            <label className="form-label">{label}</label>
+            <input type={type} value={form[key] || ''}
+              onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+              placeholder={placeholder} className="input-field" />
+          </div>
+        ))}
+        <div className="flex-1 min-w-36">
+          <label className="form-label">Classe</label>
+          <select value={form.idClasse || ''} onChange={e => setForm(f => ({ ...f, idClasse: e.target.value }))} className="select-field">
+            <option value="">— Choisir —</option>
+            {classes.map(c => <option key={c.idClasse} value={String(c.idClasse)}>{c.libelle}</option>)}
+          </select>
+        </div>
+        <button type="submit" disabled={loading} className="btn-primary shrink-0">
+          {editId ? <><Check size={14}/> Valider</> : <><Plus size={14}/> Ajouter</>}
+        </button>
+        {editId && (
+          <button type="button" onClick={() => { handleEdit(null); }}  className="btn-secondary shrink-0">
+            <X size={14}/>
+          </button>
+        )}
+      </form>
+
+      <div className="card overflow-hidden">
+        {grouped.length === 0 ? (
+          <p className="text-center text-gray-400 py-10 text-sm">Aucune matière enregistrée.</p>
+        ) : (
+          <div className="table-responsive">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  {['Libellé', 'Coefficient', 'Description', 'Classes concernées', 'Actions'].map(h => (
+                    <th key={h} className="text-left font-medium text-gray-500 px-5 py-3 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {grouped.map(group => (
+                  <tr key={group.libelle} className={`hover:bg-gray-50/50 transition-colors ${editId && group._entries.some(e => e.idCours === editId) ? 'bg-blue-50/40' : ''}`}>
+                    <td className="px-5 py-3.5 text-gray-700 font-medium whitespace-nowrap">{group.libelle}</td>
+                    <td className="px-5 py-3.5 text-gray-700 whitespace-nowrap">{group.coefficient ?? '—'}</td>
+                    <td className="px-5 py-3.5 text-gray-600">{group.description || '—'}</td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex flex-wrap gap-1">
+                        {group._entries.map(entry => (
+                          <span key={entry.idCours} className="badge bg-blue-50 text-blue-700 text-xs">
+                            {getClasseLabel(entry.idClasse)}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Modifier : on édite chaque entrée individuellement via un sous-menu */}
+                        {group._entries.length === 1 ? (
+                          <>
+                            <button onClick={() => handleEdit(group._entries[0])} className="btn-icon" title="Modifier">
+                              <Pencil size={14}/>
+                            </button>
+                            <button onClick={() => handleDelete(group._entries[0].idCours)}
+                              className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600" title="Supprimer">
+                              <Trash2 size={14}/>
+                            </button>
+                          </>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            {group._entries.map(entry => (
+                              <div key={entry.idCours} className="flex items-center gap-1">
+                                <span className="text-xs text-gray-400 w-20 truncate">{getClasseLabel(entry.idClasse)}</span>
+                                <button onClick={() => handleEdit(entry)} className="btn-icon p-1" title={`Modifier ${getClasseLabel(entry.idClasse)}`}>
+                                  <Pencil size={12}/>
+                                </button>
+                                <button onClick={() => handleDelete(entry.idCours)}
+                                  className="btn-icon p-1 text-red-400 hover:bg-red-50 hover:text-red-600" title={`Supprimer ${getClasseLabel(entry.idClasse)}`}>
+                                  <Trash2 size={12}/>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
+
 
 // ── Page principale ───────────────────────────────────────────────
 export default function ClassesPage() {

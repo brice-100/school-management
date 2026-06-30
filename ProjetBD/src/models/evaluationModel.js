@@ -115,4 +115,9 @@ const valider = async (ids) => {
   return result.affectedRows;
 };
 
-module.exports = { findAll, findById, create, update, remove, restore, valider };
+const destroy = async (idEval) => {
+  const [result] = await pool.query('DELETE FROM Evaluation WHERE idEval = ?', [idEval]);
+  return result.affectedRows;
+};
+
+module.exports = { findAll, findById, create, update, remove, restore, valider, destroy };

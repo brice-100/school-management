@@ -16,10 +16,12 @@
  * @param  {...number} allowedTypes  typeAdmin autorisés
  */
 const allowAdmin = (...allowedTypes) => (req, res, next) => {
-  if (req.user?.userType !== 'admin') {
+  const isSuperAdmin = req.user?.role === 0;
+  if (req.user?.userType !== 'admin' && !isSuperAdmin) {
     return res.status(403).json({ message: 'Accès réservé aux administrateurs' });
   }
-  if (!allowedTypes.includes(req.user.role)) {
+  const userRole = Number(req.user.role);
+  if (!allowedTypes.includes(userRole)) {
     return res.status(403).json({ message: 'Vous n\'avez pas les droits suffisants' });
   }
   next();
@@ -35,7 +37,8 @@ const allowPersonne = (...allowedTypes) => (req, res, next) => {
   if (req.user?.userType !== 'personne') {
     return res.status(403).json({ message: 'Accès réservé aux utilisateurs Personne' });
   }
-  if (!allowedTypes.includes(req.user.role)) {
+  const userRole = Number(req.user.role);
+  if (!allowedTypes.includes(userRole)) {
     return res.status(403).json({ message: 'Vous n\'avez pas les droits suffisants' });
   }
   next();
@@ -52,9 +55,12 @@ const allowPersonne = (...allowedTypes) => (req, res, next) => {
  */
 const allowAny = ({ admins = [], personnes = [] }) => (req, res, next) => {
   const { userType, role } = req.user || {};
+  const userRole = Number(role);
 
-  if (userType === 'admin'    && admins.includes(role))    return next();
-  if (userType === 'personne' && personnes.includes(role)) return next();
+  const isSuperAdmin = userRole === 0;
+
+  if ((userType === 'admin' || (!userType && isSuperAdmin)) && admins.includes(userRole)) return next();
+  if (userType === 'personne' && personnes.includes(userRole)) return next();
 
   return res.status(403).json({ message: 'Accès non autorisé' });
 };

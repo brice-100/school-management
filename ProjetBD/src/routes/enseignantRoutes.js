@@ -152,4 +152,15 @@ router.patch('/:idEnseignant/restaurer',
   enseignantController.restore
 );
 
+/**
+ * DELETE /api/enseignants/:idEnseignant/hard
+ * Suppression définitive — root/admin uniquement
+ */
+router.delete('/:idEnseignant/hard',
+  allowAdmin(0),
+  [param('idEnseignant').isInt({ min: 1 }).withMessage('idEnseignant invalide')],
+  validate,
+  enseignantController.hardRemove
+);
+
 module.exports = router;

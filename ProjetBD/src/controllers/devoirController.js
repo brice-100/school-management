@@ -58,7 +58,30 @@ const getDevoirs = asyncHandler(async (req, res) => {
  */
 const createDevoir = asyncHandler(async (req, res) => {
   const { titre, description, idCours, idSalle, date_rendu } = req.body;
-  const idPers = req.user.id; // L'enseignant connecté
+  let idPers = req.user.id; // L'enseignant connecté
+
+  if (req.user.userType === 'admin') {
+    // L'admin n'a pas d'idPers. On assigne le devoir à un enseignant de cette matière.
+    const [enseignant] = await pool.query(`
+      SELECT p.idPers 
+      FROM Personne p
+      JOIN Enseignant e ON p.idPers = e.idPers
+      LEFT JOIN teacher_matieres tm ON e.idEnseignant = tm.teacher_id
+      WHERE tm.matiere_id = ? OR e.idCours = ?
+      LIMIT 1
+    `, [idCours, idCours]);
+
+    if (enseignant.length > 0) {
+      idPers = enseignant[0].idPers;
+    } else {
+      const [anyTeacher] = await pool.query('SELECT idPers FROM Personne WHERE typePersonne = 1 LIMIT 1');
+      if (anyTeacher.length > 0) {
+        idPers = anyTeacher[0].idPers;
+      } else {
+        return res.status(400).json({ message: "Impossible de publier: aucun enseignant dans la base." });
+      }
+    }
+  }
 
   if (!titre || !idCours || !idSalle) {
     return res.status(400).json({ message: 'Titre, matière et classe sont obligatoires.' });

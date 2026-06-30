@@ -172,11 +172,19 @@ export default function TeacherList() {
                           <td className="px-5 py-3.5 text-gray-600">{t.telephone || '—'}</td>
                           <td className="px-5 py-3.5">
                             {(() => {
-                              const list = t.matieres && t.matieres.length > 0
+                              const raw = t.matieres && t.matieres.length > 0
                                 ? t.matieres
                                 : t.matiere_nom
                                   ? [{ libelle: t.matiere_nom }]
                                   : []
+                              // Dédupliquer par libellé (ex: anglais assigné à plusieurs classes)
+                              const seen = new Set()
+                              const list = raw.filter(m => {
+                                const label = m.libelle || m.nom
+                                if (!label || seen.has(label)) return false
+                                seen.add(label)
+                                return true
+                              })
                               if (list.length === 0) return <span className="text-gray-400">—</span>
                               return (
                                 <div className="flex flex-wrap gap-1">
@@ -194,13 +202,13 @@ export default function TeacherList() {
                               {showArchives && isSuperAdmin ? (
                                 <div className="flex gap-1.5">
                                   <button
-                                    onClick={() => handleRestore(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
+                                    onClick={() => handleRestore(t.id, `${t.prenom} ${t.nom}`)}
                                     className="btn-secondary text-sm py-1 px-3"
                                   >
                                     Restaurer
                                   </button>
                                   <button
-                                    onClick={() => handleHardDelete(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
+                                    onClick={() => handleHardDelete(t.id, `${t.prenom} ${t.nom}`)}
                                     className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
                                     title="Supprimer définitivement"
                                   >
@@ -210,18 +218,18 @@ export default function TeacherList() {
                               ) : (!showArchives) ? (
                                 <>
                                   <button
-                                    onClick={() => setFicheId(t.idEnseignant || t.id)}
+                                    onClick={() => setFicheId(t.id)}
                                     className="btn-icon text-blue-500 hover:bg-blue-50"
                                     title="Voir la fiche"
                                   >
                                     <Eye size={15} />
                                   </button>
-                                  <Link to={`/teachers/${t.idEnseignant || t.id}/edit`} className="btn-icon">
+                                  <Link to={`/teachers/${t.id}/edit`} className="btn-icon">
                                     <Pencil size={15} />
                                   </Link>
                                   {isSuperAdmin && (
                                     <button
-                                      onClick={() => handleDelete(t.idEnseignant || t.id, `${t.prenom} ${t.nom}`)}
+                                      onClick={() => handleDelete(t.id, `${t.prenom} ${t.nom}`)}
                                       className="btn-icon text-red-400 hover:bg-red-50 hover:text-red-600"
                                       title="Archiver"
                                     >
